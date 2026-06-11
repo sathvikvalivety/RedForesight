@@ -1,0 +1,101 @@
+
+<style>
+  .spec-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:12px; padding:1rem 0; }
+  .spec-card { background:var(--color-background-primary); border:0.5px solid var(--color-border-tertiary); border-radius:var(--border-radius-lg); padding:1rem 1.25rem; }
+  .card-label { font-size:11px; font-weight:500; color:var(--color-text-tertiary); text-transform:uppercase; letter-spacing:.06em; margin:0 0 8px; }
+  .card-title { font-size:15px; font-weight:500; color:var(--color-text-primary); margin:0 0 10px; }
+  .item-row { display:flex; align-items:flex-start; gap:8px; margin-bottom:6px; font-size:13px; color:var(--color-text-secondary); line-height:1.5; }
+  .dot { width:5px; height:5px; border-radius:50%; background:var(--color-border-primary); margin-top:6px; flex-shrink:0; }
+  .pill { display:inline-block; font-size:11px; padding:2px 8px; border-radius:20px; margin:2px 3px 2px 0; background:var(--color-background-secondary); color:var(--color-text-secondary); border:0.5px solid var(--color-border-tertiary); }
+  .pill-purple { background:#EEEDFE; color:#3C3489; }
+  .pill-teal { background:#E1F5EE; color:#0F6E56; }
+  .pill-coral { background:#FAECE7; color:#993C1D; }
+  .pill-amber { background:#FAEEDA; color:#854F0B; }
+  .section-head { font-size:12px; font-weight:500; color:var(--color-text-tertiary); text-transform:uppercase; letter-spacing:.06em; margin:1.5rem 0 .75rem; }
+  button.ask { font-size:12px; padding:5px 12px; cursor:pointer; margin-top:10px; width:100%; text-align:left; }
+</style>
+
+<h2 class="sr-only">Red Team Memory Agent technical specification</h2>
+
+<p class="section-head">Tech stack</p>
+<div class="spec-grid">
+  <div class="spec-card">
+    <p class="card-label">Language & runtime</p>
+    <p class="card-title">Python 3.11 + async</p>
+    <div class="item-row"><span class="dot"></span>LangGraph for agent orchestration and graph-based state machine</div>
+    <div class="item-row"><span class="dot"></span>FastAPI for REST surface exposed to Splunk webhooks</div>
+    <div class="item-row"><span class="dot"></span>asyncio throughout — MCP calls, vector DB reads, LLM calls all concurrent</div>
+    <span class="pill pill-purple">LangGraph</span><span class="pill pill-purple">FastAPI</span><span class="pill">Python 3.11</span>
+    <button class="ask" onclick="sendPrompt('Why use LangGraph for the Red Team Memory Agent orchestration?')">Why LangGraph? ↗</button>
+  </div>
+
+  <div class="spec-card">
+    <p class="card-label">Agent LLM</p>
+    <p class="card-title">Splunk hosted model</p>
+    <div class="item-row"><span class="dot"></span>Use Splunk's hosted LLM via AI Assistant API — keeps data in-environment, no external exfil</div>
+    <div class="item-row"><span class="dot"></span>System prompt primed as a red team operator: "You are simulating an attacker who just observed..."</div>
+    <div class="item-row"><span class="dot"></span>Structured JSON output enforced: tactic, technique ID, probability, prerequisite conditions</div>
+    <span class="pill pill-coral">Splunk hosted model</span><span class="pill pill-coral">AI Assistant API</span>
+    <button class="ask" onclick="sendPrompt('Write the system prompt for the Red Team Memory Agent LLM?')">Write the system prompt ↗</button>
+  </div>
+
+  <div class="spec-card">
+    <p class="card-label">Memory layer</p>
+    <p class="card-title">Dual-store memory</p>
+    <div class="item-row"><span class="dot"></span>Episodic memory: Chroma or Qdrant vector DB, one record per past incident. Stores signal fingerprint + what actually happened next</div>
+    <div class="item-row"><span class="dot"></span>Semantic memory: MITRE ATT&CK JSON loaded as embeddings at startup — technique descriptions, procedure examples</div>
+    <div class="item-row"><span class="dot"></span>Recall: cosine similarity search on incoming signal embedding, top-5 retrieved, fed into LLM context window</div>
+    <span class="pill pill-teal">ChromaDB</span><span class="pill pill-teal">sentence-transformers</span><span class="pill pill-teal">MITRE JSON</span>
+    <button class="ask" onclick="sendPrompt('How should I structure the vector DB schema for the Red Team Memory Agent?')">Schema design ↗</button>
+  </div>
+
+  <div class="spec-card">
+    <p class="card-label">Splunk integration</p>
+    <p class="card-title">MCP Server tools</p>
+    <div class="item-row"><span class="dot"></span><code style="font-size:12px">splunk_search</code> — run SPL queries to pull surrounding context when a signal fires</div>
+    <div class="item-row"><span class="dot"></span><code style="font-size:12px">splunk_alert_create</code> — write defender recommendations back as Splunk alerts</div>
+    <div class="item-row"><span class="dot"></span><code style="font-size:12px">splunk_lookup</code> — enrich signals with asset metadata, vulnerability scores</div>
+    <div class="item-row"><span class="dot"></span>All tool calls through Splunk MCP Server — eligible for Best Use of Splunk MCP Server prize</div>
+    <span class="pill pill-purple">Splunk MCP Server</span><span class="pill pill-purple">SPL</span>
+    <button class="ask" onclick="sendPrompt('Write example SPL queries the Red Team Memory Agent would run via MCP?')">Example SPL queries ↗</button>
+  </div>
+
+  <div class="spec-card">
+    <p class="card-label">Game tree scoring</p>
+    <p class="card-title">Probability model</p>
+    <div class="item-row"><span class="dot"></span>Each candidate next-move gets scored: p(success) = LLM prior × memory match score × asset vulnerability weight</div>
+    <div class="item-row"><span class="dot"></span>Tree pruned to depth 3 (3 moves ahead) — beyond that uncertainty compounds too fast to be useful</div>
+    <div class="item-row"><span class="dot"></span>Branches below p=0.15 dropped — analyst only sees actionable predictions</div>
+    <span class="pill pill-amber">Bayesian weighting</span><span class="pill pill-amber">depth-3 tree</span>
+  </div>
+
+  <div class="spec-card">
+    <p class="card-label">Feedback loop</p>
+    <p class="card-title">Self-improving memory</p>
+    <div class="item-row"><span class="dot"></span>Analyst confirms or rejects each prediction via a lightweight Splunk dashboard widget</div>
+    <div class="item-row"><span class="dot"></span>Confirmed predictions write a new episode to vector DB with outcome = true</div>
+    <div class="item-row"><span class="dot"></span>Over time, recall accuracy improves for your specific environment — it learns your attacker patterns</div>
+    <span class="pill pill-teal">RLHF-lite</span><span class="pill pill-teal">episodic memory</span>
+    <button class="ask" onclick="sendPrompt('How should I build the analyst feedback widget in Splunk for the Red Team Memory Agent?')">Build the feedback widget ↗</button>
+  </div>
+</div>
+
+<p class="section-head">Repo structure</p>
+<div class="spec-card" style="font-family:var(--font-mono); font-size:12px; color:var(--color-text-secondary); line-height:1.8;">
+  red-team-memory-agent/<br>
+  &nbsp;&nbsp;├── agent/<br>
+  &nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;├── orchestrator.py&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--color-text-tertiary)">← LangGraph state machine</span><br>
+  &nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;├── game_tree.py&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--color-text-tertiary)">← next-move expansion + scoring</span><br>
+  &nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;├── memory.py&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--color-text-tertiary)">← episodic + semantic recall</span><br>
+  &nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;└── mitre_loader.py&nbsp;&nbsp;&nbsp;<span style="color:var(--color-text-tertiary)">← ATT&CK JSON → embeddings</span><br>
+  &nbsp;&nbsp;├── splunk/<br>
+  &nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;├── mcp_tools.py&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--color-text-tertiary)">← MCP Server tool wrappers</span><br>
+  &nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;└── spl_templates.py&nbsp;&nbsp;<span style="color:var(--color-text-tertiary)">← reusable SPL query library</span><br>
+  &nbsp;&nbsp;├── api/<br>
+  &nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;└── webhook.py&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--color-text-tertiary)">← receives Splunk alert triggers</span><br>
+  &nbsp;&nbsp;├── dashboard/&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--color-text-tertiary)">← Splunk App (SimpleXML)</span><br>
+  &nbsp;&nbsp;├── architecture.png&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--color-text-tertiary)">← required by hackathon rules</span><br>
+  &nbsp;&nbsp;├── data/mitre_attack.json<br>
+  &nbsp;&nbsp;├── docker-compose.yml<br>
+  &nbsp;&nbsp;└── README.md
+</div>
