@@ -2,14 +2,14 @@ from typing import Dict
 
 def host_activity_summary(host: str, window_minutes: int = 60) -> str:
     return (
-        f'search index=* host="{host}" '
+        f'search index=botsv3 host="{host}" '
         f'| stats count by sourcetype '
         f'| sort - count'
     )
 
 def auth_events_in_window(host: str, window_minutes: int = 30) -> str:
     return (
-        f'search index=* host="{host}" '
+        f'search index=botsv3 host="{host}" '
         f'(EventCode=4624 OR EventCode=4625 OR EventCode=4648 OR '
         f'EventCode=4768 OR EventCode=4769 OR EventCode=4771) '
         f'| eval event_meaning=case('
@@ -25,7 +25,7 @@ def auth_events_in_window(host: str, window_minutes: int = 30) -> str:
 
 def process_creation_events(host: str, window_minutes: int = 30) -> str:
     return (
-        f'search index=* host="{host}" (EventCode=4688 OR EventCode=1) '
+        f'search index=botsv3 host="{host}" (EventCode=4688 OR EventCode=1) '
         f'| eval process=coalesce(NewProcessName, Image), '
         f'parent=coalesce(CreatorProcessName, ParentImage), '
         f'command_line=coalesce(CommandLine, ProcessCommandLine) '
@@ -34,7 +34,7 @@ def process_creation_events(host: str, window_minutes: int = 30) -> str:
 
 def network_connections_from_host(host: str, window_minutes: int = 30, exclude_internal: bool = True) -> str:
     base_query = (
-        f'search index=* host="{host}" EventCode=3 '
+        f'search index=botsv3 host="{host}" EventCode=3 '
     )
     if exclude_internal:
         base_query += (

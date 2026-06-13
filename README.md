@@ -77,9 +77,25 @@ Set up the core RedForesight agent and its memory database:
 
 4. **Start ChromaDB (Memory layer):**
    ```bash
-   docker-compose up -d
+   # We use local chroma to persist our seeded data
+   .\venv\Scripts\chroma.exe run --path db --port 8001
    ```
    This spins up ChromaDB on port 8001, which is used for both episodic memory (past attacker paths) and semantic memory (MITRE ATT&CK techniques).
+
+### Development Setup (Startup Sequence)
+
+Every development session from here needs this exact startup order:
+
+```powershell
+# 1. Start ChromaDB (local)
+.\venv\Scripts\chroma.exe run --path db --port 8001
+
+# 2. Activate venv (new terminal)
+cd E:\RedForesight
+venv\Scripts\activate
+
+# 3. Verify Splunk is running at http://localhost:8000
+```
 
 ### 5. Running the Agent
 
