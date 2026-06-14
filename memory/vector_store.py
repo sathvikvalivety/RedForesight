@@ -40,7 +40,7 @@ class VectorStore:
                 "id": result["ids"][0][i],
                 "document": result["documents"][0][i],
                 "metadata": result["metadatas"][0][i],
-                "distance": result["distances"][0][i] if "distances" in result and result["distances"] else None
+                "distance": result["distances"][0][i] if "distances" in result and result["distances"] is not None else None
             })
             
         return flat_results
@@ -57,7 +57,7 @@ class VectorStore:
             "id": result["ids"][0],
             "document": result["documents"][0],
             "metadata": result["metadatas"][0],
-            "embedding": result["embeddings"][0] if "embeddings" in result and result["embeddings"] else None
+            "embedding": result["embeddings"][0] if "embeddings" in result and result["embeddings"] is not None else None
         }
 
     def delete(self, id: str) -> None:

@@ -60,9 +60,9 @@ class AgentMemory:
             episode
         )
 
-    async def update_outcome(self, episode_id: str, confirmed_technique_id: str, outcome_confirmed: bool) -> None:
+    async def update_outcome(self, episode_id: str, confirmed_technique_id: str, outcome_confirmed: bool) -> bool:
         loop = asyncio.get_running_loop()
-        await loop.run_in_executor(
+        return await loop.run_in_executor(
             self.executor,
             self.episodic_memory.update_outcome,
             episode_id,

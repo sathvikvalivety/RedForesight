@@ -58,10 +58,10 @@ class EpisodicMemory:
                     
         return episodes
 
-    def update_outcome(self, episode_id: str, confirmed_technique_id: str, outcome_confirmed: bool) -> None:
+    def update_outcome(self, episode_id: str, confirmed_technique_id: str, outcome_confirmed: bool) -> bool:
         record = self.vector_store.get(episode_id)
         if not record or not record.get("document"):
-            return
+            return False
             
         try:
             episode = IncidentEpisode.model_validate_json(record["document"])
@@ -71,8 +71,9 @@ class EpisodicMemory:
             
             # Re-upsert
             self.store_episode(episode)
+            return True
         except Exception:
-            pass
+            return False
 
     def count(self) -> int:
         return self.vector_store.count()

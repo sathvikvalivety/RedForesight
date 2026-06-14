@@ -1,0 +1,74 @@
+<dashboard version="1.1" theme="dark">
+  <label>RedForesight Predictions</label>
+  <description>AI-driven next-move predictions for Active Directory attacks.</description>
+  
+  <row>
+    <panel>
+      <title>Recent Defender Briefs</title>
+      <table>
+        <search>
+          <query>
+            index=main sourcetype=_json source=redforesight_agent 
+            | spath event.tactic_classification 
+            | spath event.top_prediction.technique_id 
+            | spath event.top_prediction.technique_name 
+            | spath event.top_prediction.confidence_tier 
+            | spath event.signal_summary 
+            | table _time, event.signal_summary, event.tactic_classification, event.top_prediction.technique_id, event.top_prediction.technique_name, event.top_prediction.confidence_tier 
+            | rename event.signal_summary as "Signal", event.tactic_classification as "Tactic", event.top_prediction.technique_id as "Predicted Technique", event.top_prediction.technique_name as "Technique Name", event.top_prediction.confidence_tier as "Confidence"
+            | sort - _time
+          </query>
+          <earliest>-24h@h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="drilldown">row</option>
+        <option name="refresh.display">progressbar</option>
+      </table>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <title>Feedback Form</title>
+      <html>
+        <div>
+          <p>Confirm or Reject the top prediction for an episode:</p>
+          <form action="/api/v1/feedback" method="POST" id="feedbackForm">
+            <label for="episode_id">Episode ID:</label><br/>
+            <input type="text" id="episode_id" name="episode_id" style="width:300px;"/><br/><br/>
+            <label for="technique_id">Confirmed Technique ID:</label><br/>
+            <input type="text" id="technique_id" name="confirmed_technique_id" style="width:300px;"/><br/><br/>
+            <label for="outcome">Outcome Confirmed?</label><br/>
+            <select id="outcome" name="outcome_confirmed">
+              <option value="true">True (Predicted Correctly)</option>
+              <option value="false">False (Prediction Incorrect)</option>
+            </select><br/><br/>
+            <button type="submit">Submit Feedback</button>
+          </form>
+          <script>
+            // Note: In a real Splunk app, this form would POST to the FastAPI backend.
+            // Since this runs in Splunk's UI, you'd typically need a custom JS file or a proxy
+            // to send the data to the FastAPI server running on port 8080.
+            document.getElementById("feedbackForm").onsubmit = function(e) {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                const data = {
+                    episode_id: formData.get("episode_id"),
+                    confirmed_technique_id: formData.get("confirmed_technique_id"),
+                    outcome_confirmed: formData.get("outcome_confirmed") === "true"
+                };
+                fetch("http://localhost:8080/api/v1/feedback", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(data)
+                })
+                .then(r => r.json())
+                .then(d => alert("Feedback saved!"))
+                .catch(err => alert("Error: " + err));
+            };
+          </script>
+        </div>
+      </html>
+    </panel>
+  </row>
+</dashboard>
