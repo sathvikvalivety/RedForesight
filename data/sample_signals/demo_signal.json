@@ -1,0 +1,22 @@
+{
+  "signal_id": "DEMO-001",
+  "timestamp": "2026-06-14T14:00:00Z",
+  "host": "BSTOLL-L",
+  "source_ip": "192.168.1.45",
+  "raw_event": "Process rundll32.exe (PID 4821) accessed lsass.exe memory with GrantedAccess 0x1010. This access mask is consistent with credential dumping tools including Mimikatz.",
+  "event_type": "credential_access_attempt",
+  "severity": "high",
+  "splunk_index": "botsv3",
+  "additional_context": {
+    "process_name": "rundll32.exe",
+    "target_process": "lsass.exe",
+    "granted_access": "0x1010",
+    "parent_process": "cmd.exe",
+    "user": "BSTOLL-L\\Administrator",
+    "pid": 4821,
+    "event_id": 10,
+    "sysmon_event": true,
+    "rule_name": "Credential Dumping via LSASS Access",
+    "mitre_technique": "T1003.001"
+  }
+}

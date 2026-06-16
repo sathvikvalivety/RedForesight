@@ -4,6 +4,7 @@ from agent.schemas import ObservedSignal, SplunkContext, PredictedMove
 from agent.memory import AgentMemory
 from memory.vector_store import VectorStore
 from memory.semantic import search_techniques, embed_text
+from splunk.spl_templates import generate_hunting_query
 
 KILL_CHAIN_NEXT = {
     "Initial Access":        ["Execution", "Persistence", "Defense Evasion"],
@@ -76,7 +77,7 @@ class GameTree:
             det_text = candidate.detection[:100] if candidate.detection else "MITRE ATT&CK page for detection guidance"
             defender_action = f"Hunt for {candidate.name} indicators. Review {det_text}"
             
-            splunk_query = f'index=botsv3 | search "{candidate.name}" OR "{candidate.technique_id}"'
+            splunk_query = generate_hunting_query(candidate.technique_id, candidate.name)
             
             move = PredictedMove(
                 technique_id=candidate.technique_id,

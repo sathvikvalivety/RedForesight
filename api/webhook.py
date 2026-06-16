@@ -84,7 +84,7 @@ async def receive_trigger(payload: TriggerPayload, request: Request, background_
         request.app.state
     )
     
-    return {"status": "accepted", "signal_id": signal_id}
+    return {"status": "accepted", "signal_id": signal_id, "task_id": task_id}
 
 
 

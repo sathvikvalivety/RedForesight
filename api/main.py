@@ -2,8 +2,8 @@ import os
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+import asyncio
 from dotenv import load_dotenv
-
 from agent.memory import AgentMemory
 from agent.classifier import TacticClassifier
 from agent.game_tree import GameTree
@@ -62,14 +62,33 @@ async def lifespan(app: FastAPI):
     await alert_writer.close()
 
 
+from fastapi.middleware.cors import CORSMiddleware
+
 app = FastAPI(title="RedForesight API", version="1.0.0", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(webhook_router, prefix="/api/v1")
 app.include_router(feedback_router, prefix="/api/v1")
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "agent": "ready"}
+    try:
+        loop = asyncio.get_running_loop()
+        episode_count = await loop.run_in_executor(
+            app.state.agent_memory.executor,
+            app.state.agent_memory.episodic_store.count
+        )
+    except Exception as e:
+        logger.error(f"Error getting episode count: {e}")
+        episode_count = 0
+    return {"status": "ok", "agent": "ready", "episode_count": episode_count}
     
 if __name__ == "__main__":
     import uvicorn

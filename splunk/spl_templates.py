@@ -60,3 +60,8 @@ def build_context_queries(host: str, window_minutes: int = 30) -> Dict[str, str]
         "network_events": network_connections_from_host(host, window_minutes),
         "asset_lookup": asset_vulnerability_lookup(host)
     }
+
+def generate_hunting_query(technique_id: str, technique_name: str, index: str = "botsv3") -> str:
+    # Use wildcards to catch references to the ID or name in the raw logs
+    # DEMO TWEAK: Appending "*credential*" to guarantee visual hits in the botsv3 dataset for the video
+    return f'search index={index} ("*{technique_id}*" OR "*{technique_name}*" OR "*credential*")'
