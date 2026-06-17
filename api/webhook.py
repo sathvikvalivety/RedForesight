@@ -9,12 +9,14 @@ from datetime import datetime, timezone
 from agent.schemas import ObservedSignal
 from agent.orchestrator import run_agent
 
+from cachetools import TTLCache
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/trigger", tags=["Webhook"])
 
-# Simple in-memory store for task statuses (for demo purposes)
-TASK_STATUS: Dict[str, Dict[str, Any]] = {}
+# TTL Cache for task statuses (keeps tasks for 1 hour to prevent memory leaks)
+TASK_STATUS: TTLCache = TTLCache(maxsize=10000, ttl=3600)
 
 class TriggerPayload(BaseModel):
     signal_id: Optional[str] = None
@@ -70,7 +72,7 @@ async def background_run_agent(task_id: str, payload: TriggerPayload, app_state:
         TASK_STATUS[task_id]["error"] = str(e)
 
 
-@router.post("", status_code=202)
+@router.post("/")
 async def receive_trigger(payload: TriggerPayload, request: Request, background_tasks: BackgroundTasks):
     task_id = str(uuid4())
     signal_id = payload.signal_id or task_id

@@ -11,15 +11,15 @@ logger = logging.getLogger(__name__)
 class LLMClient:
     def __init__(self):
         load_dotenv()
-        self.provider = os.getenv("LLM_PROVIDER", "gemini").lower()
-        self.gemini_model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
-        self.ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-        self.ollama_model = os.getenv("OLLAMA_MODEL", "llama3.2")
-        self.anthropic_key = os.getenv("ANTHROPIC_API_KEY", "")
+        self.provider = os.getenv("LLM_PROVIDER")
+        self.gemini_model = os.getenv("GEMINI_MODEL")
+        self.ollama_base_url = os.getenv("OLLAMA_BASE_URL")
+        self.ollama_model = os.getenv("OLLAMA_MODEL")
+        self.anthropic_key = os.getenv("ANTHROPIC_API_KEY")
         
-        # Initialize Google GenAI SDK if using Gemini
-        # We use direct HTTP calls now as per spec
-        pass
+        if not self.provider:
+            raise ValueError("LLM_PROVIDER must be configured in .env")
+            
         self.client = httpx.AsyncClient(timeout=60.0)
         
         self.system_prompt = """You are a red team operator simulating an advanced persistent threat actor.
@@ -85,7 +85,11 @@ Return ONLY this JSON array with no other text:
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
             raise ValueError("GEMINI_API_KEY is not set.")
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.gemini_model}:generateContent?key={api_key}"
+        if not self.gemini_model:
+            raise ValueError("GEMINI_MODEL is not set.")
+            
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.gemini_model}:generateContent"
+        headers = {"x-goog-api-key": api_key}
         payload = {
             "contents": [
                 {
@@ -102,12 +106,20 @@ Return ONLY this JSON array with no other text:
                 "responseMimeType": "application/json"
             }
         }
-        resp = await self.client.post(url, json=payload)
+        resp = await self.client.post(url, headers=headers, json=payload)
         resp.raise_for_status()
-        text = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
-        return self._parse_llm_response(text, original_moves)
+        try:
+            data = resp.json()
+            text = data["candidates"][0]["content"]["parts"][0]["text"]
+            return self._parse_llm_response(text, original_moves)
+        except (json.JSONDecodeError, KeyError, IndexError) as e:
+            logger.warning(f"Failed to parse JSON response from Gemini: {e}")
+            return original_moves
 
     async def _score_with_ollama(self, system_prompt: str, user_prompt: str, original_moves: List[PredictedMove]) -> List[PredictedMove]:
+        if not self.ollama_base_url or not self.ollama_model:
+            raise ValueError("OLLAMA_BASE_URL and OLLAMA_MODEL must be set.")
+            
         url = f"{self.ollama_base_url}/api/chat"
         payload = {
             "model": self.ollama_model,
@@ -120,8 +132,12 @@ Return ONLY this JSON array with no other text:
         }
         resp = await self.client.post(url, json=payload)
         resp.raise_for_status()
-        text = resp.json()["message"]["content"]
-        return self._parse_llm_response(text, original_moves)
+        try:
+            text = resp.json()["message"]["content"]
+            return self._parse_llm_response(text, original_moves)
+        except (json.JSONDecodeError, KeyError) as e:
+            logger.warning(f"Failed to parse JSON response from Ollama: {e}")
+            return original_moves
 
     async def _score_with_anthropic(self, system_prompt: str, user_prompt: str, original_moves: List[PredictedMove]) -> List[PredictedMove]:
         if not self.anthropic_key:
@@ -133,7 +149,7 @@ Return ONLY this JSON array with no other text:
             "content-type": "application/json"
         }
         payload = {
-            "model": "claude-haiku-4-5-20251001",
+            "model": "claude-3-5-haiku-20241022",
             "max_tokens": 1000,
             "system": system_prompt,
             "messages": [
@@ -142,11 +158,14 @@ Return ONLY this JSON array with no other text:
         }
         resp = await self.client.post(url, headers=headers, json=payload)
         resp.raise_for_status()
-        text = resp.json()["content"][0]["text"]
-        return self._parse_llm_response(text, original_moves)
+        try:
+            text = resp.json()["content"][0]["text"]
+            return self._parse_llm_response(text, original_moves)
+        except (json.JSONDecodeError, KeyError, IndexError) as e:
+            logger.warning(f"Failed to parse JSON response from Anthropic: {e}")
+            return original_moves
 
     def _parse_llm_response(self, text: str, original_moves: List[PredictedMove]) -> List[PredictedMove]:
-        print(f"DEBUG: raw text: {repr(text)}")
         # Strip markdown fences
         text = text.strip()
         if text.startswith("```"):

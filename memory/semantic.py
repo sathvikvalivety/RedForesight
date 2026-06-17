@@ -76,15 +76,31 @@ def search_techniques(query_text: str, vector_store: VectorStore, top_k: int = 5
         # Parse platforms
         platforms = [p.strip() for p in m.get("platforms", "").split(",") if p.strip()]
         
-        # Reconstruct MitreTechnique
-        # Since description/detection were truncated during embedding, we use the raw document as description.
+        # The document was formatted like:
+        # Technique: TXXXX Name
+        # Tactic: TacticName
+        # Description: desc
+        # Detection: det
+        # Platforms: plat
+        
+        doc = res.get("document", "")
+        desc = ""
+        det = ""
+        
+        # Simple extraction based on the known prefix pattern
+        for line in doc.split("\n"):
+            if line.startswith("Description: "):
+                desc = line[13:]
+            elif line.startswith("Detection: "):
+                det = line[11:]
+        
         tech = MitreTechnique(
             technique_id=m.get("technique_id", ""),
             name=m.get("name", ""),
             tactic=m.get("tactic", ""),
             tactic_id=m.get("tactic_id", ""),
-            description=res.get("document", ""),
-            detection="",
+            description=desc if desc else doc,
+            detection=det,
             platforms=platforms,
             procedure_examples=[],
             sub_techniques=[]

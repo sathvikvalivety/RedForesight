@@ -21,6 +21,7 @@
         <search>
           <query>
             index=main sourcetype=_json source=redforesight_agent 
+            | spath brief_id
             | spath tactic_classification 
             | spath top_prediction.technique_id 
             | spath top_prediction.technique_name 
@@ -29,8 +30,8 @@
             | spath top_prediction.confidence_tier 
             | spath signal_summary 
             | eval Reasoning=substr('top_prediction.reasoning', 1, 150) . "..."
-            | table _time, signal_summary, tactic_classification, top_prediction.technique_id, top_prediction.technique_name, top_prediction.probability, top_prediction.confidence_tier, Reasoning 
-            | rename signal_summary as "Signal", tactic_classification as "Tactic", top_prediction.technique_id as "Predicted Technique", top_prediction.technique_name as "Technique Name", top_prediction.probability as "Probability", top_prediction.confidence_tier as "Confidence"
+            | table _time, brief_id, signal_summary, tactic_classification, top_prediction.technique_id, top_prediction.technique_name, top_prediction.probability, top_prediction.confidence_tier, Reasoning 
+            | rename brief_id as "Episode ID", signal_summary as "Signal", tactic_classification as "Tactic", top_prediction.technique_id as "Predicted Technique", top_prediction.technique_name as "Technique Name", top_prediction.probability as "Probability", top_prediction.confidence_tier as "Confidence"
             | sort - _time
           </query>
           <earliest>-24h@h</earliest>

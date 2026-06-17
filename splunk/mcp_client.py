@@ -25,7 +25,7 @@ class SplunkMCPClient:
         timeout_sec = int(env_vars.get("MCP_TIMEOUT_SECONDS", os.environ.get("MCP_TIMEOUT_SECONDS", "30")))
         
         self.client = httpx.AsyncClient(
-            verify=False,
+            verify=True,
             timeout=timeout_sec,
             headers={
                 "Authorization": f"Bearer {self.token}",

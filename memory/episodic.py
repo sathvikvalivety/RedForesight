@@ -69,8 +69,24 @@ class EpisodicMemory:
             episode.outcome_confirmed = outcome_confirmed
             episode.closed_at = datetime.utcnow()
             
-            # Re-upsert
-            self.store_episode(episode)
+            episode_json = episode.model_dump_json()
+            metadata = record["metadata"]
+            metadata["outcome_confirmed"] = str(outcome_confirmed)
+            metadata["confirmed_technique_id"] = confirmed_technique_id
+            
+            # Re-use existing embedding to save compute and API calls
+            embedding = record.get("embedding")
+            if embedding is None:
+                # Fallback if somehow embedding wasn't retrieved
+                embedding_text = self._build_embedding_text(episode.signal)
+                embedding = embed_text(embedding_text)
+                
+            self.vector_store.upsert(
+                ids=[episode_id],
+                embeddings=[embedding],
+                documents=[episode_json],
+                metadatas=[metadata]
+            )
             return True
         except Exception:
             return False

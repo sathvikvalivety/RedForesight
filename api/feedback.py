@@ -51,7 +51,7 @@ async def list_episodes(request: Request):
                     "id": results["ids"][i],
                     "signal_type": metadata.get("signal_event_type", "unknown"),
                     "host": metadata.get("signal_host", "unknown"),
-                    "confirmed": metadata.get("outcome_confirmed", False),
+                    "confirmed": str(metadata.get("outcome_confirmed")).lower() == "true",
                     "confirmed_technique": metadata.get("confirmed_technique_id", None)
                 })
                 

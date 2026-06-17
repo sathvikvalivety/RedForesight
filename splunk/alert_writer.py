@@ -2,7 +2,7 @@ import os
 import json
 import logging
 import httpx
-from datetime import datetime
+from datetime import datetime, timezone
 from pydantic import BaseModel
 from typing import Any, Dict
 
@@ -29,7 +29,7 @@ class AlertWriter:
             data = brief
             
         event_payload = {
-            "time": datetime.utcnow().timestamp(),
+            "time": datetime.now(timezone.utc).timestamp(),
             "host": data.get("splunk_context", {}).get("host", "unknown"),
             "source": "redforesight_agent",
             "sourcetype": "_json",

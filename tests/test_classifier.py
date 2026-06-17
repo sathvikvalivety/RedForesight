@@ -5,11 +5,6 @@ from agent.schemas import ObservedSignal
 import chromadb
 from unittest.mock import patch
 
-@pytest.fixture
-def agent_memory():
-    with patch("memory.vector_store.chromadb.HttpClient") as mock_client:
-        mock_client.return_value = chromadb.PersistentClient(path="db")
-        return AgentMemory()
 
 @pytest.fixture
 def signal_lsass():

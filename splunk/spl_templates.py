@@ -1,6 +1,12 @@
+import re
 from typing import Dict
 
+def sanitize_spl(value: str) -> str:
+    # Remove any quotes, pipes, brackets, or backslashes to prevent SPL injection
+    return re.sub(r'[\"\'\|\[\]\\]', '', value)
+
 def host_activity_summary(host: str, window_minutes: int = 60) -> str:
+    host = sanitize_spl(host)
     return (
         f'search index=botsv3 host="{host}" '
         f'| stats count by sourcetype '
@@ -8,6 +14,7 @@ def host_activity_summary(host: str, window_minutes: int = 60) -> str:
     )
 
 def auth_events_in_window(host: str, window_minutes: int = 30) -> str:
+    host = sanitize_spl(host)
     return (
         f'search index=botsv3 host="{host}" '
         f'(EventCode=4624 OR EventCode=4625 OR EventCode=4648 OR '
@@ -24,6 +31,7 @@ def auth_events_in_window(host: str, window_minutes: int = 30) -> str:
     )
 
 def process_creation_events(host: str, window_minutes: int = 30) -> str:
+    host = sanitize_spl(host)
     return (
         f'search index=botsv3 host="{host}" (EventCode=4688 OR EventCode=1) '
         f'| eval process=coalesce(NewProcessName, Image), '
@@ -33,6 +41,7 @@ def process_creation_events(host: str, window_minutes: int = 30) -> str:
     )
 
 def network_connections_from_host(host: str, window_minutes: int = 30, exclude_internal: bool = True) -> str:
+    host = sanitize_spl(host)
     base_query = (
         f'search index=botsv3 host="{host}" EventCode=3 '
     )
@@ -46,6 +55,7 @@ def network_connections_from_host(host: str, window_minutes: int = 30, exclude_i
     return base_query
 
 def asset_vulnerability_lookup(host: str) -> str:
+    host = sanitize_spl(host)
     return (
         f'| inputlookup vulnerability_scores '
         f'| search host="{host}" '
@@ -62,6 +72,8 @@ def build_context_queries(host: str, window_minutes: int = 30) -> Dict[str, str]
     }
 
 def generate_hunting_query(technique_id: str, technique_name: str, index: str = "botsv3") -> str:
+    technique_id = sanitize_spl(technique_id)
+    technique_name = sanitize_spl(technique_name)
     # Use wildcards to catch references to the ID or name in the raw logs
     # DEMO TWEAK: Appending "*credential*" to guarantee visual hits in the botsv3 dataset for the video
     return f'search index={index} ("*{technique_id}*" OR "*{technique_name}*" OR "*credential*")'

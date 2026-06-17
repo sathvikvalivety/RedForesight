@@ -5,15 +5,35 @@ require([
 ], function($, mvc) {
     console.log("Feedback script loaded");
     
+    var apiHost = window.location.hostname || "127.0.0.1";
+    var apiBaseUrl = "http://" + apiHost + ":8080/api/v1";
+    
+    function getApiKey() {
+        var key = sessionStorage.getItem("redforesight_api_key");
+        if (!key) {
+            key = prompt("Enter RedForesight API Key:");
+            if (key) {
+                sessionStorage.setItem("redforesight_api_key", key);
+            }
+        }
+        return key || "";
+    }
+    
     // Live episode count polling
     function fetchHealth() {
-        $.get("http://127.0.0.1:8080/api/v1/health")
-         .done(function(data) {
-             $("#live_episode_count").text(data.episode_count || 0);
-         })
-         .fail(function() {
-             console.log("Failed to fetch episode count");
-         });
+        $.ajax({
+            url: apiBaseUrl + "/health",
+            type: "GET",
+            headers: {
+                "X-API-Key": getApiKey()
+            },
+            success: function(data) {
+                $("#live_episode_count").text(data.episode_count || 0);
+            },
+            error: function() {
+                console.log("Failed to fetch episode count");
+            }
+        });
     }
     
     // Initial fetch and poll
@@ -40,9 +60,12 @@ require([
         };
         
         $.ajax({
-            url: "http://127.0.0.1:8080/api/v1/feedback",
+            url: apiBaseUrl + "/feedback",
             type: "POST",
             contentType: "application/json",
+            headers: {
+                "X-API-Key": getApiKey()
+            },
             data: JSON.stringify(payload),
             success: function(response) {
                 alert("Feedback saved successfully!");

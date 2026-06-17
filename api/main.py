@@ -74,8 +74,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(webhook_router, prefix="/api/v1")
-app.include_router(feedback_router, prefix="/api/v1")
+from fastapi import Depends
+from api.security import verify_api_key
+
+app.include_router(webhook_router, prefix="/api/v1", dependencies=[Depends(verify_api_key)])
+app.include_router(feedback_router, prefix="/api/v1", dependencies=[Depends(verify_api_key)])
 
 @app.get("/health")
 async def health():

@@ -36,7 +36,14 @@ def build_graph(mcp_client: SplunkMCPClient, agent_memory: AgentMemory, game_tre
         
         query = host_activity_summary(signal.host, 60)
         
+        # We will still pull the basic search, but also pull the full context
         result = await mcp_client.search(query)
+        context_data = await mcp_client.pull_host_context(signal.host, 60)
+        
+        proc_evts = context_data.get("process_events").data if context_data.get("process_events") and context_data["process_events"].success else []
+        auth_evts = context_data.get("auth_events").data if context_data.get("auth_events") and context_data["auth_events"].success else []
+        net_evts = context_data.get("network_events").data if context_data.get("network_events") and context_data["network_events"].success else []
+        host_sum = context_data.get("host_summary").data if context_data.get("host_summary") and context_data["host_summary"].success else []
         
         is_bad_data = False
         if result.success and isinstance(result.data, list) and len(result.data) > 0:
@@ -61,10 +68,10 @@ def build_graph(mcp_client: SplunkMCPClient, agent_memory: AgentMemory, game_tre
             context = SplunkContext(
                 host=signal.host,
                 query_window_minutes=60,
-                process_events=[],
-                auth_events=[],
-                network_events=[],
-                host_summary=[],
+                process_events=proc_evts if isinstance(proc_evts, list) else [],
+                auth_events=auth_evts if isinstance(auth_evts, list) else [],
+                network_events=net_evts if isinstance(net_evts, list) else [],
+                host_summary=host_sum if isinstance(host_sum, list) else [],
                 raw_results={"data": result.data}
             )
             
@@ -137,8 +144,11 @@ def build_graph(mcp_client: SplunkMCPClient, agent_memory: AgentMemory, game_tre
         
         top_prediction = moves[0] if moves else None
         
+        episode_id_obj = uuid4()
+        state["episode_id"] = str(episode_id_obj)
+        
         brief = DefenderBrief(
-            brief_id=uuid4(),
+            brief_id=episode_id_obj,
             signal_summary=f"{signal.severity.upper()} severity event on {signal.host}: {signal.event_type}",
             tactic_classification=state["tactic_classification"] or "Unknown",
             tactic_id=state["tactic_id"] or "TA0000",
@@ -151,7 +161,7 @@ def build_graph(mcp_client: SplunkMCPClient, agent_memory: AgentMemory, game_tre
         state["defender_brief"] = brief
         
         episode = IncidentEpisode(
-            episode_id=uuid4(),
+            episode_id=episode_id_obj,
             signal=signal,
             predictions=moves,
             created_at=datetime.now(timezone.utc)

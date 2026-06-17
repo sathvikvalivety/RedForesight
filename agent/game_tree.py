@@ -4,6 +4,7 @@ from agent.schemas import ObservedSignal, SplunkContext, PredictedMove
 from agent.memory import AgentMemory
 from memory.vector_store import VectorStore
 from memory.semantic import search_techniques, embed_text
+import asyncio
 from splunk.spl_templates import generate_hunting_query
 
 KILL_CHAIN_NEXT = {
@@ -39,8 +40,16 @@ class GameTree:
         candidates = []
         seen_ids = set()
         
+        loop = asyncio.get_running_loop()
         for next_tactic in next_tactics:
-            techs = search_techniques(signal.raw_event, self.vector_store, top_k=5, tactic_filter=next_tactic)
+            techs = await loop.run_in_executor(
+                self.agent_memory.executor,
+                search_techniques,
+                signal.raw_event,
+                self.vector_store,
+                5,
+                next_tactic
+            )
             for t in techs:
                 if t.technique_id not in seen_ids:
                     candidates.append(t)
@@ -51,7 +60,12 @@ class GameTree:
         p_severity = severity_weight.get(signal.severity.lower(), 0.5)
         
         for candidate in candidates:
-            similarity = self._get_similarity_score(candidate.technique_id, signal.raw_event)
+            similarity = await loop.run_in_executor(
+                self.agent_memory.executor,
+                self._get_similarity_score,
+                candidate.technique_id,
+                signal.raw_event
+            )
             p_semantic = similarity
             
             p_platform = 1.0 if any("Windows" in p for p in candidate.platforms) else 0.7
