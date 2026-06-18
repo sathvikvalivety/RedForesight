@@ -24,8 +24,11 @@ class SplunkMCPClient:
         self.token = env_vars.get("MCP_TOKEN", os.environ.get("MCP_TOKEN", ""))
         timeout_sec = int(env_vars.get("MCP_TIMEOUT_SECONDS", os.environ.get("MCP_TIMEOUT_SECONDS", "30")))
         
+        verify_ssl_str = env_vars.get("SPLUNK_VERIFY_SSL", os.environ.get("SPLUNK_VERIFY_SSL", "False"))
+        verify_ssl = verify_ssl_str.lower() in ("true", "1", "yes")
+        
         self.client = httpx.AsyncClient(
-            verify=True,
+            verify=verify_ssl,
             timeout=timeout_sec,
             headers={
                 "Authorization": f"Bearer {self.token}",

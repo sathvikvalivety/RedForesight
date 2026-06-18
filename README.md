@@ -119,38 +119,37 @@ Set up the core RedForesight agent and its memory database:
    ```
    This spins up ChromaDB on port 8001, which is used for both episodic memory (past attacker paths) and semantic memory (MITRE ATT&CK techniques).
 
-### Development Setup (Startup Sequence)
+### 6. Starting the Project
 
-Every development session from here needs this exact startup order:
+To start a new development session or run RedForesight, you must start the required services in the following order:
 
+**1. Start Splunk Enterprise**
+Ensure your Splunk instance (Docker or local) is running at `http://localhost:8000` and the MCP server is installed.
+
+**2. Start ChromaDB (Memory Layer)**
+In a new terminal, activate your virtual environment and start ChromaDB on port 8001:
 ```powershell
-# 1. Start ChromaDB (local)
-.\venv\Scripts\chroma.exe run --path db --port 8001
-
-# 2. Activate venv (new terminal)
 cd E:\RedForesight
 venv\Scripts\activate
-
-# 3. Verify Splunk is running at http://localhost:8000
+.\venv\Scripts\chroma.exe run --path db --port 8001
 ```
 
-### 6. Running the Agent
+**3. Run RedForesight (Choose an option)**
+With Splunk and ChromaDB running, open a new terminal, activate the `venv`, and choose how to run the agent:
 
-With Splunk, the MCP Server, and ChromaDB running, you have two options for running RedForesight:
-
-**Option A: Run the Local Verification Script**
-To test that your environment, Splunk MCP, and ChromaDB are correctly configured:
-```bash
-python scripts/run_local.py
-```
-This script acts as a proof-of-life check. It fires a test signal (e.g., from `data/sample_signals/lsass_dump.json`), queries Splunk via the MCP server for context, and validates that everything is reachable.
-
-**Option B: Start the FastAPI Server (For UI and Webhooks)**
-To run the full agent with the interactive dashboard and webhook capabilities, start the FastAPI server:
+*Option A: Start the FastAPI Server (For UI and Webhooks)*
+To run the full agent with the interactive dashboard and webhook capabilities:
 ```bash
 uvicorn api.main:app --reload
 ```
-Once started, the API will be available at `http://localhost:8000` (or the port specified by uvicorn). This powers the Splunk dashboard's prediction and feedback workflows.
+The API will be available at `http://localhost:8000` (or your uvicorn port). This powers the Splunk dashboard's prediction and feedback workflows.
+
+*Option B: Run the Local Verification Script*
+To simply test that your environment is correctly configured (proof-of-life):
+```bash
+python scripts/run_local.py
+```
+This fires a test signal, queries Splunk via MCP, and validates that all components are communicating properly.
 
 ---
 
