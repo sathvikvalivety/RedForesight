@@ -70,8 +70,24 @@ To add the MCP Server to Splunk:
 4. Check **Upgrade app** if you are reinstalling, then click **Upload**.
 5. Splunk will prompt you to restart. Click **Restart Now**.
 
-Once Splunk reboots, the MCP server will be active. Make sure to generate an authentication token in Splunk (Settings > Tokens) for your `mcp_client.py` to authenticate securely.
+Once Splunk reboots, the MCP server will be active. To authenticate the RedForesight agent with Splunk, you must generate an authentication token:
 
+1. In Splunk Web, go to **Settings** > **Tokens** (under Users and Authentication).
+2. If token authentication is not enabled, click **Enable Token Authentication**.
+3. Click **New Token**.
+4. Select the `admin` user, set the Audience to `mcp`, and set an expiration (or leave it blank to never expire).
+5. Click **Create** and **copy the generated token string** immediately (you cannot view it again later).
+6. Open the `.env` file in your RedForesight directory and paste it as `MCP_TOKEN=your_token_string_here`.
+
+**Generating the HTTP Event Collector (HEC) Token:**
+RedForesight also needs an HEC token to write its predictions back into Splunk as events.
+1. In Splunk Web, go to **Settings** > **Data Inputs**.
+2. Click on **HTTP Event Collector**.
+3. If HEC is disabled, click **Global Settings**, select **Enabled**, and click **Save**.
+4. Click **New Token**.
+5. Name it `RedForesight Predictions` and click **Next**.
+6. For the **Index**, select the index you are using (e.g., `botsv3` or `main`) and click **Review**, then **Submit**.
+7. **Copy the generated Token Value** and paste it into your `.env` file as `HEC_TOKEN=your_hec_token_here`.
 ### 4. Installing or Updating the RedForesight Dashboard
 
 If you make any changes to the `.xml` dashboard files in `dashboard/redforesight_app` (or are installing it for the first time), you must package the folder into a `.tgz` archive and upload it to Splunk:
@@ -127,11 +143,20 @@ To start a new development session or run RedForesight, you must start the requi
 Ensure your Splunk instance (Docker or local) is running at `http://localhost:8000` and the MCP server is installed.
 
 **2. Start ChromaDB (Memory Layer)**
+You can start ChromaDB either locally via Python or using Docker Compose.
+
+*Option A: Run Locally (Python)*
 In a new terminal, activate your virtual environment and start ChromaDB on port 8001:
 ```powershell
 cd E:\RedForesight
 venv\Scripts\activate
 .\venv\Scripts\chroma.exe run --path db --port 8001
+```
+
+*Option B: Run via Docker Compose*
+Alternatively, you can run ChromaDB in a containerized environment (ideal for macOS/Linux or clean setups). This will automatically persist data to a Docker volume:
+```bash
+docker-compose up -d
 ```
 
 **3. Run RedForesight (Choose an option)**
