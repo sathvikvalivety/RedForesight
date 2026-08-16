@@ -1,0 +1,11 @@
+<nav search_view="search" color="#D85D3C">
+  <view name="trigger" label="▶ Trigger Attack" default="true"/>
+  <view name="predictions" label="🎯 Predictions"/>
+  <view name="verification" label="✓ Verification &amp; Feedback"/>
+  <view name="attacker_pov" label="&#9729; Attacker POV Terminal"/>
+  <view name="test_pipeline" label="⚙ Test Pipeline"/>
+  <collection label="Search">
+    <a href="/app/redforesight/search">Open Search</a>
+  </collection>
+</nav>
+

@@ -1,0 +1,20 @@
+{
+  "signal_id": "SIG-1003",
+  "timestamp": "2026-06-11T10:15:00Z",
+  "host": "CORP-WS-07",
+  "source_ip": "10.0.1.42",
+  "raw_event": "Process Create: WINWORD.EXE spawned powershell.exe -enc ...",
+  "event_type": "initial_access_attempt",
+  "severity": "critical",
+  "splunk_index": "windows",
+  "additional_context": {
+    "pid": 3056,
+    "parent_process": "WINWORD.EXE",
+    "process_name": "powershell.exe",
+    "command_line": "powershell.exe -enc JABzAD0ATgBlAHcALQBPAGIAagBlAGMAdAAgAEkATwAuAE0AZQBtAG8AcgB5AFMAdAByAGUAYQBtACgAWwBDAG8AbgB2AGUAcgB0AF0AOgA6AEYAcgBvAG0AQgBhAHMAZQA2ADQAUwB0AHIAaQBuAGcAKAAiAEgA...",
+    "user": "alice",
+    "document_name": "Invoice_Urgent.docm",
+    "event_id": 1,
+    "sysmon_event": "ProcessCreate"
+  }
+}

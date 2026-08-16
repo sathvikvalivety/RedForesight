@@ -1,0 +1,82 @@
+<dashboard version="1.1" theme="dark" script="feedback_v2.js">
+  <label>RedForesight — Trigger Attack</label>
+  <description>Fire an attacker signal into the RedForesight agent and watch the prediction pipeline respond.</description>
+
+  <row>
+    <html>
+      <style>
+        .rf-hero{background:linear-gradient(135deg,#1a1a2e,#16213e);border-left:4px solid #e94560;padding:18px;border-radius:6px;color:#fff;margin-bottom:8px}
+        .rf-hero h1{margin:0 0 4px 0;font-size:24px;color:#e94560}
+        .rf-hero p{margin:0;opacity:.85;font-size:13px}
+        .rf-form{background:#0f3460;padding:14px;border-radius:6px;margin-top:10px}
+        .rf-form label{display:block;color:#aeb8fe;margin:6px 0 2px 0;font-size:12px;text-transform:uppercase;letter-spacing:.5px}
+        .rf-form input,.rf-form select,.rf-form textarea{width:100%;padding:7px 9px;border-radius:4px;border:1px solid #33415c;background:#11182a;color:#fff;font-size:13px;box-sizing:border-box}
+        .rf-form select{max-height:200px;overflow-y:auto}
+        .rf-form button{margin-top:12px;background:#e94560;color:#fff;border:none;padding:9px 18px;border-radius:4px;cursor:pointer;font-weight:600}
+        .rf-form button:hover{background:#c73650}
+        .rf-badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;margin-left:6px}
+        .rf-count{display:inline-block;margin-left:10px;color:#aeb8fe;font-size:12px}
+      </style>
+      <div class="rf-hero">
+        <h1>RedForesight — Predictive Threat Intelligence <span class="rf-badge">v1.0</span></h1>
+        <p>AI agent that thinks like an attacker — predicts the adversary's next move before they make it, using MITRE ATT&amp;CK + Splunk memory.</p>
+      </div>
+    </html>
+  </row>
+
+  <row>
+    <panel>
+      <html>
+        <div class="rf-form">
+          <label>Attack Signal <span id="rf_scenario_count" class="rf-count"></span></label>
+          <select id="rf_scenario" size="12" style="height:220px"></select>
+          <label>Target Host (auto-filled from scenario)</label>
+          <input type="text" id="rf_host" value="BSTOLL-L"/>
+          <label>Source IP (auto-filled from scenario)</label>
+          <input type="text" id="rf_source_ip" value="10.0.0.5" readonly="readonly" style="opacity:0.7"/>
+          <label>Severity (auto-filled from scenario)</label>
+          <select id="rf_severity">
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+            <option value="critical">Critical</option>
+          </select>
+          <label>Raw event description (editable)</label>
+          <textarea id="rf_raw" rows="4" style="font-family:monospace;font-size:12px"></textarea>
+          <button id="rf_trigger_btn">▶ Fire Signal to Agent</button>
+          <div id="rf_trigger_status" style="margin-top:10px;color:#aeb8fe;font-size:12px"></div>
+        </div>
+      </html>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <title>Live Agent Task Status</title>
+      <table>
+        <search>
+          <query>index=main sourcetype=_json source=redforesight_agent earliest=-1h
+| spath signal_summary
+| spath tactic_classification
+| spath top_prediction.technique_id
+| spath top_prediction.technique_name
+| spath top_prediction.probability
+| eval Prob=round('top_prediction.probability'*100,1)."%"
+| table _time, signal_summary, tactic_classification, top_prediction.technique_id, top_prediction.technique_name, Prob
+| rename signal_summary AS "Signal", tactic_classification AS "Tactic", top_prediction.technique_id AS "Predicted TTP", top_prediction.technique_name AS "Technique Name", Prob AS "Probability"
+| sort - _time</query>
+          <earliest>-1h@h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="refresh">10s</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="drilldown">row</option>
+        <format type="color" field="Probability">
+          <colorPalette type="list">[#808080,#FFBF00,#FF0000]</colorPalette>
+          <scale type="threshold">30,60</scale>
+        </format>
+      </table>
+    </panel>
+  </row>
+</dashboard>
+

@@ -1,0 +1,72 @@
+<dashboard version="1.1" theme="dark" script="feedback_v2.js">
+  <label>RedForesight — Verification &amp; Feedback</label>
+  <description>Confirm or reject predictions so episodic memory learns the real outcome.</description>
+
+  <row>
+    <panel>
+      <title>Recent Episodes (from ChromaDB via FastAPI)</title>
+      <html>
+        <div id="rf_episodes_table" style="margin-top:8px">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;color:#fff">
+            <thead><tr style="background:#0f3460;color:#aeb8fe;text-align:left">
+              <th style="padding:8px">Episode ID</th><th>Host</th><th>Event Type</th><th>Confirmed</th><th>Confirmed TTP</th>
+            </tr></thead>
+            <tbody id="rf_episodes_body"><tr><td colspan="5" style="padding:10px;opacity:.6">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </html>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <title>Feedback Form — confirm/reject a prediction</title>
+      <html>
+        <style>
+          .rf-form{background:#0f3460;padding:14px;border-radius:6px}
+          .rf-form label{display:block;color:#aeb8fe;margin:6px 0 2px 0;font-size:12px;text-transform:uppercase;letter-spacing:.5px}
+          .rf-form input,.rf-form select{width:100%;padding:7px 9px;border-radius:4px;border:1px solid #33415c;background:#11182a;color:#fff;font-size:13px;box-sizing:border-box}
+          .rf-form button{margin-top:12px;background:#e94560;color:#fff;border:none;padding:9px 18px;border-radius:4px;cursor:pointer;font-weight:600}
+          .rf-form button:hover{background:#c73650}
+        </style>
+        <div class="rf-form">
+          <label>Episode ID</label>
+          <input type="text" id="episode_id" placeholder="e.g. 550e8400-e29b-41d4-a716-446655440000" style="width:340px"/>
+          <label>Confirmed Technique ID</label>
+          <input type="text" id="technique_id" placeholder="e.g. T1003.001" style="width:340px"/>
+          <label>Outcome Confirmed?</label>
+          <select id="outcome">
+            <option value="true">True — prediction was correct</option>
+            <option value="false">False — prediction was wrong</option>
+          </select>
+          <button id="submitFeedbackBtn" class="btn btn-primary">Submit Feedback</button>
+          <div id="rf_feedback_status" style="margin-top:10px;color:#aeb8fe;font-size:12px"></div>
+        </div>
+      </html>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <title>Confirmed vs Rejected Predictions (written back by agent)</title>
+      <chart>
+        <search>
+          <query>index=main sourcetype=_json source=redforesight_agent
+| spath ranked_predictions{}.technique_id
+| spath ranked_predictions{}.technique_name
+| spath ranked_predictions{}.probability
+| eval Confirmed=if(isnull('top_prediction.technique_id'),"pending","ranked")
+| stats count by ranked_predictions{}.tactic
+| rename ranked_predictions{}.tactic AS Tactic, count AS Predictions</query>
+          <earliest>-7d@h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="charting.chart">bar</option>
+        <option name="charting.axisLabelsX.majorLabelStyle.rotation">-30</option>
+        <option name="refresh">30s</option>
+      </chart>
+    </panel>
+  </row>
+</dashboard>
+
+

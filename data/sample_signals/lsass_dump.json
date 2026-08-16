@@ -1,0 +1,18 @@
+{
+  "signal_id": "SIG-1001",
+  "timestamp": "2026-06-11T10:00:00Z",
+  "host": "BSTOLL-L",
+  "source_ip": "10.0.0.5",
+  "raw_event": "Process Access: Target lsass.exe accessed by rundll32.exe",
+  "event_type": "credential_access_attempt",
+  "severity": "high",
+  "splunk_index": "windows",
+  "additional_context": {
+    "pid": 4512,
+    "parent_process": "cmd.exe",
+    "user": "SYSTEM",
+    "event_id": 10,
+    "sysmon_event": "ProcessAccess",
+    "granted_access": "0x1010"
+  }
+}

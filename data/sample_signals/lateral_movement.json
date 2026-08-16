@@ -1,0 +1,18 @@
+{
+  "signal_id": "SIG-1002",
+  "timestamp": "2026-06-11T10:05:00Z",
+  "host": "CORP-WS-12",
+  "source_ip": "10.0.1.25",
+  "raw_event": "Process Create: services.exe spawned psexesvc.exe",
+  "event_type": "lateral_movement_attempt",
+  "severity": "high",
+  "splunk_index": "windows",
+  "additional_context": {
+    "pid": 1024,
+    "parent_process": "services.exe",
+    "process_name": "psexesvc.exe",
+    "user": "SYSTEM",
+    "event_id": 1,
+    "sysmon_event": "ProcessCreate"
+  }
+}
