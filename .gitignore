@@ -17,7 +17,7 @@ desktop.ini
 *.tgz
 *.gz
 *.md
-*docx
+*.docx
 scenarios_data.json
 scenarios_block.txt
 splunk_token.txt
