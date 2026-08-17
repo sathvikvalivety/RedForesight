@@ -30,11 +30,11 @@
         <div class="rf-form">
           <label>Attack Signal <span id="rf_scenario_count" class="rf-count"></span></label>
           <select id="rf_scenario" size="12" style="height:220px"></select>
-          <label>Target Host (auto-filled from scenario)</label>
+          <label>Target Host </label>
           <input type="text" id="rf_host" value="BSTOLL-L"/>
-          <label>Source IP (auto-filled from scenario)</label>
+          <label>Source IP </label>
           <input type="text" id="rf_source_ip" value="10.0.0.5" readonly="readonly" style="opacity:0.7"/>
-          <label>Severity (auto-filled from scenario)</label>
+          <label>Severity </label>
           <select id="rf_severity">
             <option value="low">Low</option>
             <option value="medium">Medium</option>
