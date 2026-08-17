@@ -59,9 +59,11 @@
           <select id="rf_severity">
             <option value="low">Low</option>
             <option value="medium">Medium</option>
-            <option value="high">High</option>
+            <option value="high" selected="selected">High</option>
             <option value="critical">Critical</option>
           </select>
+          <label>Agent API Port (FastAPI)</label>
+          <input type="text" id="rf_api_port" value="8081" placeholder="e.g. 8081 or 8080" style="width:140px;margin-bottom:6px"/>
           <label>Raw event description (editable)</label>
           <textarea id="rf_raw" rows="3" style="font-family:monospace;font-size:12px"></textarea>
           <button id="rf_trigger_btn">&#9654; Fire Signal to Agent</button>

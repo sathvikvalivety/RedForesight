@@ -1,5 +1,8 @@
 """
-RedForesight Graph Visualizer - Live pipeline graph on port 8081
+RedForesight Graph Visualizer - port 8081
+No trigger button. Polls ChromaDB directly for episode count changes.
+When a new attack is fired from Splunk (port 8000), the episode count increases
+and this visualizer animates the pipeline graph live.
 """
 import os, sys, asyncio, json
 from pathlib import Path
@@ -12,32 +15,12 @@ except ImportError:
 
 import httpx
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, JSONResponse
-from pydantic import BaseModel
-from typing import Dict, Any
+from fastapi.responses import HTMLResponse
 
 app = FastAPI(title="RedForesight Graph Visualizer")
 API_BASE = "http://127.0.0.1:8080/api/v1"
 API_KEY = os.getenv("API_KEY", "redforesight_demo_key_2026")
-connected_clients = set()
-
-async def broadcast(msg):
-    dead = set()
-    for ws in connected_clients:
-        try:
-            await ws.send_json(msg)
-        except Exception:
-            dead.add(ws)
-    connected_clients.difference_update(dead)
-
-class TriggerBody(BaseModel):
-    host: str = "CORP-DC-01"
-    source_ip: str = "10.0.0.5"
-    event_type: str
-    raw_event: str
-    severity: str = "high"
-    splunk_index: str = "botsv3"
-    additional_context: Dict[str, Any] = {}
+CHROMA_COUNT_URL = "http://127.0.0.1:8001/api/v2/tenants/default_tenant/databases/default_database/collections/f22d883d-9af2-4c61-bff0-dc303c191ac8/count"
 
 HTML = open(Path(__file__).parent / "graph_viz.html", "r", encoding="utf-8").read()
 
@@ -45,144 +28,164 @@ HTML = open(Path(__file__).parent / "graph_viz.html", "r", encoding="utf-8").rea
 async def get_page():
     return HTMLResponse(HTML)
 
-@app.post("/trigger")
-async def trigger(body: TriggerBody):
-    async with httpx.AsyncClient(timeout=120.0) as client:
-        try:
-            r = await client.post(
-                API_BASE + "/trigger",
-                json=body.model_dump(),
-                headers={"X-API-Key": API_KEY, "Content-Type": "application/json"},
-                follow_redirects=True
+async def get_episode_count():
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as c:
+            r = await c.get(CHROMA_COUNT_URL)
+            return r.json().get("total_count", 0)
+    except Exception:
+        return -1
+
+async def get_latest_episode():
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as c:
+            r = await c.get(API_BASE + "/feedback/episodes", headers={"X-API-Key": API_KEY})
+            eps = r.json().get("episodes", [])
+            return eps[0] if eps else None
+    except Exception:
+        return None
+
+async def get_splunk_predictions():
+    import urllib3
+    urllib3.disable_warnings()
+    try:
+        async with httpx.AsyncClient(verify=False, timeout=30.0) as sc:
+            lr = await sc.post(
+                "https://127.0.0.1:8089/services/auth/login",
+                data={"username": "admin", "password": "RedForesight123!"},
+                timeout=15.0
             )
-            data = r.json()
-            task_id = data.get("task_id", "")
-        except Exception as e:
-            return JSONResponse({"error": str(e)}, status_code=500)
+            if "<sessionKey>" not in lr.text:
+                return "Unknown", []
+            stoken = lr.text.split("<sessionKey>")[1].split("</sessionKey>")[0]
+            sc.headers["Authorization"] = "Bearer " + stoken
+            sq = (
+                'search index=main sourcetype=_json source=redforesight_agent '
+                '| spath tactic_classification '
+                '| spath ranked_predictions{}.technique_id as tid '
+                '| spath ranked_predictions{}.technique_name as tname '
+                '| spath ranked_predictions{}.tactic as ttactic '
+                '| spath ranked_predictions{}.probability as tprob '
+                '| spath ranked_predictions{}.confidence_tier as tconf '
+                '| spath ranked_predictions{}.reasoning as treason '
+                '| sort - _time | head 1'
+            )
+            sr = await sc.post(
+                "https://127.0.0.1:8089/services/search/jobs",
+                data={"search": sq, "exec_mode": "oneshot", "count": 1, "output_mode": "json"},
+                timeout=30.0
+            )
+            sd = sr.json()
+            results = sd.get("results", [])
+            if not results:
+                return "Unknown", []
+            row = results[0]
+            tactic_name = row.get("tactic_classification", "Unknown")
+            if isinstance(tactic_name, list):
+                tactic_name = tactic_name[0] if tactic_name else "Unknown"
 
-        await broadcast({"type": "signal", "data": body.model_dump()})
+            tids = row.get("tid", [])
+            if isinstance(tids, str): tids = [tids]
+            tnames = row.get("tname", [])
+            if isinstance(tnames, str): tnames = [tnames]
+            ttactics = row.get("ttactic", [])
+            if isinstance(ttactics, str): ttactics = [ttactics]
+            tprobs = row.get("tprob", [])
+            if isinstance(tprobs, str): tprobs = [tprobs]
+            tconfs = row.get("tconf", [])
+            if isinstance(tconfs, str): tconfs = [tconfs]
+            treasons = row.get("treason", [])
+            if isinstance(treasons, str): treasons = [treasons]
 
-        await asyncio.sleep(0.4)
-        await broadcast({"type": "node", "node": "ingest", "state": "active"})
-        await asyncio.sleep(0.5)
-        await broadcast({"type": "node", "node": "ingest", "state": "done"})
+            preds = []
+            for i in range(min(3, len(tids))):
+                try:
+                    prob = float(tprobs[i]) if i < len(tprobs) else 0.0
+                except (ValueError, IndexError):
+                    prob = 0.0
+                preds.append({
+                    "technique_id": tids[i] if i < len(tids) else "?",
+                    "technique_name": tnames[i] if i < len(tnames) else "?",
+                    "tactic": ttactics[i] if i < len(ttactics) else "?",
+                    "probability": prob,
+                    "confidence_tier": tconfs[i] if i < len(tconfs) else "low",
+                    "reasoning": treasons[i] if i < len(treasons) else ""
+                })
+            return tactic_name, preds
+    except Exception:
+        return "Unknown", []
 
-        await broadcast({"type": "node", "node": "splunk", "state": "active"})
-        await asyncio.sleep(0.7)
-        await broadcast({"type": "node", "node": "splunk", "state": "done"})
-
-        await broadcast({"type": "node", "node": "classify", "state": "active"})
-        await asyncio.sleep(0.5)
-
-        for attempt in range(60):
-            await asyncio.sleep(2)
-            try:
-                sr = await client.get(
-                    API_BASE + "/trigger/status/" + task_id,
-                    headers={"X-API-Key": API_KEY},
-                    follow_redirects=True
-                )
-                sd = sr.json()
-                status = sd.get("status")
-                if status == "completed":
-                    brief = sd.get("brief", {})
-                    tactic = brief.get("tactic_classification", "Unknown")
-                    await broadcast({"type": "node", "node": "classify", "state": "done", "result": tactic})
-
-                    preds = brief.get("ranked_predictions", [])
-                    await asyncio.sleep(0.5)
-                    await broadcast({"type": "node", "node": "gametree", "state": "active"})
-                    await asyncio.sleep(0.8)
-                    await broadcast({"type": "node", "node": "gametree", "state": "done", "result": str(len(preds)) + " moves"})
-
-                    await asyncio.sleep(0.5)
-                    await broadcast({"type": "node", "node": "llm", "state": "active"})
-                    await asyncio.sleep(1.0)
-                    await broadcast({"type": "node", "node": "llm", "state": "done"})
-
-                    await asyncio.sleep(0.5)
-                    await broadcast({"type": "node", "node": "brief", "state": "active"})
-                    await asyncio.sleep(0.8)
-                    await broadcast({"type": "node", "node": "brief", "state": "done"})
-
-                    top3 = preds[:3] if preds else []
-                    await broadcast({"type": "predictions", "data": top3})
-                    await broadcast({"type": "done"})
-                    break
-                elif status == "failed":
-                    await broadcast({"type": "error", "message": sd.get("error", "Agent failed")})
-                    break
-            except Exception:
-                continue
-
-    return {"status": "ok", "task_id": task_id}
+async def safe_send(ws, msg):
+    try:
+        await ws.send_json(msg)
+    except Exception:
+        pass
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
-    connected_clients.add(websocket)
-    try:
-        while True:
-            await asyncio.sleep(1)
-    except WebSocketDisconnect:
-        connected_clients.discard(websocket)
+    last_count = await get_episode_count()
+    await safe_send(websocket, {"type": "init", "count": last_count})
 
-
-class NotifyBody(BaseModel):
-    task_id: str
-    signal: Dict[str, Any] = {}
-
-@app.post("/notify")
-async def notify(body: NotifyBody):
-    """Receive notification from Splunk trigger page and stream to graph clients."""
-    await broadcast({"type": "signal", "data": body.signal})
-    await asyncio.sleep(0.3)
-    await broadcast({"type": "node", "node": "ingest", "state": "active"})
-    await asyncio.sleep(0.5)
-    await broadcast({"type": "node", "node": "ingest", "state": "done"})
-    await broadcast({"type": "node", "node": "splunk", "state": "active"})
-    await asyncio.sleep(0.7)
-    await broadcast({"type": "node", "node": "splunk", "state": "done"})
-    await broadcast({"type": "node", "node": "classify", "state": "active"})
-
-    # Poll the main API for the task result
-    async with httpx.AsyncClient(timeout=120.0) as client:
-        for attempt in range(60):
+    while True:
+        try:
             await asyncio.sleep(2)
-            try:
-                sr = await client.get(
-                    API_BASE + "/trigger/status/" + body.task_id,
-                    headers={"X-API-Key": API_KEY},
-                    follow_redirects=True
-                )
-                sd = sr.json()
-                status = sd.get("status")
-                if status == "completed":
-                    brief = sd.get("brief", {})
-                    tactic = brief.get("tactic_classification", "Unknown")
-                    await broadcast({"type": "node", "node": "classify", "state": "done", "result": tactic})
-                    preds = brief.get("ranked_predictions", [])
-                    await asyncio.sleep(0.5)
-                    await broadcast({"type": "node", "node": "gametree", "state": "active"})
-                    await asyncio.sleep(0.8)
-                    await broadcast({"type": "node", "node": "gametree", "state": "done", "result": str(len(preds)) + " moves"})
-                    await asyncio.sleep(0.5)
-                    await broadcast({"type": "node", "node": "llm", "state": "active"})
-                    await asyncio.sleep(1.0)
-                    await broadcast({"type": "node", "node": "llm", "state": "done"})
-                    await asyncio.sleep(0.5)
-                    await broadcast({"type": "node", "node": "brief", "state": "active"})
-                    await asyncio.sleep(0.8)
-                    await broadcast({"type": "node", "node": "brief", "state": "done"})
-                    await broadcast({"type": "predictions", "data": preds[:3]})
-                    await broadcast({"type": "done"})
-                    break
-                elif status == "failed":
-                    await broadcast({"type": "error", "message": sd.get("error", "Agent failed")})
-                    break
-            except Exception:
-                continue
-    return {"status": "ok"}
+            new_count = await get_episode_count()
+
+            if new_count > last_count:
+                last_count = new_count
+
+                # Get the latest episode info
+                latest = await get_latest_episode()
+                sig = {
+                    "host": (latest.get("host", "unknown") if latest else "unknown"),
+                    "source_ip": "10.0.0.5",
+                    "event_type": (latest.get("signal_type", "unknown") if latest else "unknown"),
+                    "severity": "high",
+                    "raw_event": (latest.get("signal_type", "") if latest else "")
+                }
+
+                # Animate pipeline
+                await safe_send(websocket, {"type": "signal", "data": sig})
+                await asyncio.sleep(0.3)
+                await safe_send(websocket, {"type": "node", "node": "ingest", "state": "active"})
+                await asyncio.sleep(0.5)
+                await safe_send(websocket, {"type": "node", "node": "ingest", "state": "done"})
+                await safe_send(websocket, {"type": "node", "node": "splunk", "state": "active"})
+                await asyncio.sleep(0.7)
+                await safe_send(websocket, {"type": "node", "node": "splunk", "state": "done"})
+                await safe_send(websocket, {"type": "node", "node": "classify", "state": "active"})
+                await asyncio.sleep(0.5)
+
+                # Wait for the agent to finish, then get predictions from Splunk
+                tactic_name, preds = "Unknown", []
+                for _ in range(30):
+                    await asyncio.sleep(2)
+                    tactic_name, preds = await get_splunk_predictions()
+                    if preds:
+                        break
+
+                await safe_send(websocket, {"type": "node", "node": "classify", "state": "done", "result": tactic_name})
+                await asyncio.sleep(0.5)
+                await safe_send(websocket, {"type": "node", "node": "gametree", "state": "active"})
+                await asyncio.sleep(0.8)
+                await safe_send(websocket, {"type": "node", "node": "gametree", "state": "done", "result": str(len(preds)) + " moves"})
+                await asyncio.sleep(0.5)
+                await safe_send(websocket, {"type": "node", "node": "llm", "state": "active"})
+                await asyncio.sleep(1.0)
+                await safe_send(websocket, {"type": "node", "node": "llm", "state": "done"})
+                await asyncio.sleep(0.5)
+                await safe_send(websocket, {"type": "node", "node": "brief", "state": "active"})
+                await asyncio.sleep(0.8)
+                await safe_send(websocket, {"type": "node", "node": "brief", "state": "done"})
+                await safe_send(websocket, {"type": "predictions", "data": preds})
+                await safe_send(websocket, {"type": "done"})
+
+        except WebSocketDisconnect:
+            break
+        except Exception:
+            pass
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8081)
