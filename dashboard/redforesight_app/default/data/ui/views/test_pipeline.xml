@@ -1,0 +1,86 @@
+<dashboard version="1.1" theme="dark" script="feedback_v2.js">
+  <label>RedForesight — Test &amp; Verify Pipeline</label>
+  <description>Health and integrity checks across the agent, memory, and Splunk layers.</description>
+
+  <row>
+    <panel>
+      <title>Agent / API Health (FastAPI)</title>
+      <table>
+        <search>
+          <query>index=main sourcetype=_json source=redforesight_agent
+| stats count AS briefs, max(_time) AS last_brief
+| eval status=if(briefs&gt;0,"healthy","idle")
+| table status, briefs, last_brief</query>
+          <earliest>-24h@h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="refresh">15s</option>
+      </table>
+    </panel>
+    <panel>
+      <title>Prediction Volume (last 24h)</title>
+      <chart>
+        <search>
+          <query>index=main sourcetype=_json source=redforesight_agent
+| timechart count</query>
+          <earliest>-24h@h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="charting.chart">column</option>
+        <option name="refresh">15s</option>
+      </chart>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <title>Tactic Distribution of Predictions</title>
+      <chart>
+        <search>
+          <query>index=main sourcetype=_json source=redforesight_agent
+| spath ranked_predictions{}.tactic
+| stats count by ranked_predictions{}.tactic
+| rename ranked_predictions{}.tactic AS Tactic</query>
+          <earliest>-7d@h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="charting.chart">pie</option>
+        <option name="refresh">30s</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>Top 10 Predicted Techniques</title>
+      <table>
+        <search>
+          <query>index=main sourcetype=_json source=redforesight_agent
+| spath top_prediction.technique_id
+| spath top_prediction.technique_name
+| stats count AS predictions by top_prediction.technique_id, top_prediction.technique_name
+| sort - predictions
+| head 10
+| rename top_prediction.technique_id AS "TTP", top_prediction.technique_name AS "Technique", predictions AS "Times Predicted"</query>
+          <earliest>-7d@h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="refresh">30s</option>
+      </table>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <title>Runbook — phase tests</title>
+      <html>
+        <pre style="background:#0f3460;color:#aeb8fe;padding:14px;border-radius:6px;font-size:12px;white-space:pre-wrap">
+Phase 1 — Connectivity:    python scripts/run_local.py
+Phase 2 — MITRE Brain:     python scripts/run_phase2_test.py
+Phase 3 — Orchestrator:    python scripts/run_phase3_test.py
+Phase 4 — LLM + API loop:  python scripts/run_phase4_test.py
+Unit tests (mocked):       pytest
+Demo trigger (PowerShell): .\scripts\demo_trigger.ps1
+        </pre>
+      </html>
+    </panel>
+  </row>
+</dashboard>
+

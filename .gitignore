@@ -18,3 +18,10 @@ desktop.ini
 *.gz
 *.md
 *docx
+scenarios_data.json
+scenarios_block.txt
+splunk_token.txt
+hec_token.txt
+failed_alerts.log
+.DS_Store
+

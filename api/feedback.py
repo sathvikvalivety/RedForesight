@@ -49,8 +49,8 @@ async def list_episodes(request: Request):
             for i, metadata in enumerate(results["metadatas"]):
                 episodes.append({
                     "id": results["ids"][i],
-                    "signal_type": metadata.get("signal_event_type", "unknown"),
-                    "host": metadata.get("signal_host", "unknown"),
+                    "signal_type": metadata.get("event_type", "unknown"),
+                    "host": metadata.get("host", "unknown"),
                     "confirmed": str(metadata.get("outcome_confirmed")).lower() == "true",
                     "confirmed_technique": metadata.get("confirmed_technique_id", None)
                 })
@@ -60,3 +60,4 @@ async def list_episodes(request: Request):
     except Exception as e:
         logger.error(f"Error listing episodes: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+

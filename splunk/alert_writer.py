@@ -17,7 +17,7 @@ class AlertWriter:
         self.rest_url = f"https://{os.getenv('SPLUNK_HOST', 'localhost')}:{os.getenv('SPLUNK_PORT', '8089')}/services/receivers/simple"
         self.username = os.getenv("SPLUNK_USERNAME", "admin")
         self.password = os.getenv("SPLUNK_PASSWORD", "")
-        self.client = httpx.AsyncClient(verify=False, timeout=10.0)
+        self.client = httpx.AsyncClient(verify=False, timeout=15.0)
         self.fallback_file = "failed_alerts.log"
         self.write_method = None
 
@@ -89,3 +89,4 @@ class AlertWriter:
 
     async def close(self):
         await self.client.aclose()
+

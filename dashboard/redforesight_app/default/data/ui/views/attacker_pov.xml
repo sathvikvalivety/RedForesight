@@ -1,0 +1,86 @@
+<dashboard version="1.1" theme="dark" script="feedback_v2.js">
+  <label>RedForesight — Attacker POV Terminal</label>
+  <description>Live narrative view of what the AI agent thinks the attacker is doing right now.</description>
+
+  <row>
+    <html>
+      <style>
+        .rf-terminal{background:#0a0e14;border:2px solid #1a1a2e;border-radius:8px;padding:0;overflow:hidden;font-family:"Cascadia Code","Consolas","Courier New",monospace;font-size:13px;color:#a0a0a0;min-height:520px}
+        .rf-terminal-header{background:#1a1a2e;padding:8px 14px;display:flex;align-items:center;gap:8px}
+        .rf-terminal-header .dot{width:12px;height:12px;border-radius:50%}
+        .rf-terminal-header .dot.red{background:#e94560}
+        .rf-terminal-header .dot.yellow{background:#f5a623}
+        .rf-terminal-header .dot.green{background:#3ad29f}
+        .rf-terminal-header .title{color:#e94560;font-weight:700;margin-left:8px;font-size:14px}
+        .rf-terminal-header .badge{margin-left:auto;color:#aeb8fe;font-size:11px;opacity:0.7}
+        .rf-terminal-body{padding:14px 18px;overflow-y:auto;max-height:480px;line-height:1.6}
+        .rf-terminal-line{margin:2px 0;white-space:pre-wrap;word-break:break-word}
+        .rf-prompt{color:#e94560;font-weight:bold}
+        .rf-attacker{color:#f5a623}
+        .rf-agent{color:#3ad29f}
+        .rf-warning{color:#FF0000;font-weight:bold}
+        .rf-info{color:#aeb8fe}
+        .rf-dim{color:#555;font-size:11px}
+        .rf-prob{color:#f5a623;font-weight:bold}
+        .rf-action{color:#3ad29f;border-left:3px solid #3ad29f;padding-left:8px;margin:4px 0 4px 12px}
+        .rf-block{color:#FF0000;border-left:3px solid #FF0000;padding-left:8px;margin:4px 0 4px 12px}
+        .rf-tactic{color:#a78bfa;font-weight:bold}
+        .rf-host{color:#60a5fa}
+        .rf-blink{animation:blink 1s infinite}
+        @keyframes blink{0%{opacity:1}50%{opacity:0}100%{opacity:1}}
+        .rf-stat{display:inline-block;background:#1a1a2e;padding:4px 12px;border-radius:4px;margin:2px;font-size:12px}
+        .rf-stat .label{color:#aeb8fe;font-size:10px;text-transform:uppercase}
+        .rf-stat .value{color:#e94560;font-weight:bold;font-size:16px}
+        .rf-bar{height:6px;border-radius:3px;background:#1a1a2e;overflow:hidden;margin:2px 0}
+        .rf-bar-fill{height:100%;border-radius:3px;transition:width 0.5s}
+      </style>
+      <div class="rf-terminal">
+        <div class="rf-terminal-header">
+          <div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div>
+          <div class="title">RedForesight AI — Attacker Mind Trace</div>
+          <div class="badge" id="rf_pov_status">monitoring...</div>
+        </div>
+        <div class="rf-terminal-body" id="rf_pov_terminal">
+          <div class="rf-terminal-line rf-info">[SYSTEM] RedForesight agent online. Monitoring for attacker signals...</div>
+          <div class="rf-terminal-line rf-dim">[SYSTEM] MITRE ATT&amp;CK memory: 697 techniques loaded | Episodic memory: <span id="rf_pov_episodes">0</span> incidents</div>
+          <div class="rf-terminal-line rf-dim">[SYSTEM] Waiting for attack signals from Splunk or manual trigger...</div>
+          <div class="rf-terminal-line rf-prompt rf-blink">_</div>
+        </div>
+      </div>
+    </html>
+  </row>
+
+  <row>
+    <panel>
+      <title>Predicted Next Moves (live from Splunk)</title>
+      <table>
+        <search>
+          <query>index=main sourcetype=_json source=redforesight_agent earliest=-1h
+| spath signal_summary
+| spath tactic_classification
+| spath top_prediction.technique_id
+| spath top_prediction.technique_name
+| spath top_prediction.probability
+| spath top_prediction.reasoning
+| spath top_prediction.splunk_hunting_query
+| spath top_prediction.defender_action
+| spath splunk_context.host
+| eval Prob=round('top_prediction.probability'*100,1)."%"
+| eval Host=coalesce('splunk_context.host',"unknown")
+| table _time, Host, signal_summary, tactic_classification, top_prediction.technique_id, top_prediction.technique_name, Prob, top_prediction.reasoning, top_prediction.defender_action, top_prediction.splunk_hunting_query
+| rename signal_summary AS "Signal", tactic_classification AS "Detected Tactic", top_prediction.technique_id AS "Predicted TTP", top_prediction.technique_name AS "Predicted Next Move", Prob AS "Probability", top_prediction.reasoning AS "AI Reasoning", top_prediction.defender_action AS "Defender Action", top_prediction.splunk_hunting_query AS "Hunt Query"
+| sort - _time</query>
+          <earliest>-1h@h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="refresh">5s</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="drilldown">row</option>
+        <format type="color" field="Probability">
+          <colorPalette type="list">[#808080,#FFBF00,#FF0000]</colorPalette>
+          <scale type="threshold">30,60</scale>
+        </format>
+      </table>
+    </panel>
+  </row>
+</dashboard>

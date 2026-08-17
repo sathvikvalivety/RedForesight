@@ -1,7 +1,8 @@
+$apiKey = Read-Host "Enter RedForesight API Key"
 $signal = Get-Content data\sample_signals\demo_signal.json -Raw
 $response = Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/trigger" `
   -Method Post `
-  -Headers @{"Content-Type"="application/json"} `
+  -Headers @{"Content-Type"="application/json"; "X-API-Key"=$apiKey} `
   -Body $signal
 
 Write-Host "Task ID: $($response.task_id)"
@@ -10,7 +11,7 @@ Write-Host "Signal ID: $($response.signal_id)"
 $max_attempts = 20
 for ($i=1; $i -le $max_attempts; $i++) {
     Start-Sleep 2
-    $status = Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/trigger/status/$($response.task_id)" -Method Get
+    $status = Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/trigger/status/$($response.task_id)" -Method Get -Headers @{"X-API-Key"=$apiKey}
     if ($status.status -ne "running") {
         break
     }

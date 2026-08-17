@@ -9,6 +9,7 @@ from agent.classifier import TacticClassifier
 from agent.game_tree import GameTree
 from agent.orchestrator import run_agent
 from splunk.mcp_client import SplunkMCPClient
+from agent.llm_client import LLMClient
 from memory.vector_store import VectorStore
 
 async def main():
@@ -26,6 +27,7 @@ async def main():
     client = SplunkMCPClient()
     clf = TacticClassifier(mem)
     gt = GameTree(mem, vs)
+    llm = LLMClient()
     
     lsass_signal = ObservedSignal(
         signal_id="SIG-LSASS",
@@ -87,7 +89,7 @@ async def main():
     
     # Test 5: run_agent() end-to-end
     initial_episodes = mem.episodic_store.count()
-    brief = await run_agent(lsass_signal, client, mem, gt, clf)
+    brief = await run_agent(lsass_signal, client, mem, gt, clf, llm)
     t5_pass = brief is not None and brief.prediction_count > 0 and brief.tactic_classification == "Credential Access"
     table.add_row("Test 5", "Orchestrator generates valid DefenderBrief", pass_fail(t5_pass))
     
@@ -103,3 +105,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+

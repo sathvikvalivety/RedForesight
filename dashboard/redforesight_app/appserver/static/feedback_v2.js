@@ -279,8 +279,118 @@ require([
     }
     setTimeout(fetchEpisodes, 1500);
     setInterval(fetchEpisodes, 10000);
+
+
+    // ============================================================
+    // ATTACKER POV TERMINAL
+    // ============================================================
+    var povInitialized = false;
+    var lastBriefTime = null;
+
+    function initPovTerminal() {
+        if (povInitialized) return;
+        if ($("#rf_pov_terminal").length === 0) return;
+        povInitialized = true;
+        $("#rf_pov_status").text("monitoring...");
+    }
+
+    function povLog(html, cls) {
+        var term = $("#rf_pov_terminal");
+        if (term.length === 0) return;
+        var t = new Date().toLocaleTimeString();
+        var line = "<div class=\"rf-terminal-line " + (cls||"") + "\">[" + t + "] " + html + "</div>";
+        term.find(".rf-blink").remove();
+        term.append(line);
+        term.append("<div class=\"rf-terminal-line rf-prompt rf-blink\">_</div>");
+        term.scrollTop(term[0].scrollHeight);
+    }
+
+    var lastBriefTime = "";
+    function watchForNewBriefs() {
+        if ($("#rf_pov_terminal").length === 0) return;
+        setInterval(function() {
+            $.ajax({
+                url: "/en-US/splunkd/services/search/jobs",
+                type: "POST",
+                data: {
+                    search: "search index=main sourcetype=_json source=redforesight_agent | spath signal_summary | spath top_prediction.technique_id | spath top_prediction.technique_name | spath top_prediction.probability | spath top_prediction.reasoning | spath top_prediction.confidence_tier | spath top_prediction.splunk_hunting_query | spath top_prediction.defender_action | spath tactic_classification | spath splunk_context.host | sort - _time | head 1",
+                    exec_mode: "oneshot",
+                    count: 1,
+                    output_mode: "json",
+                    earliest_time: "-10m",
+                    latest_time: "now"
+                },
+                success: function(resp) {
+                    var results = resp.results || [];
+                    if (results.length > 0) {
+                        renderSplunkBrief(results[0]);
+                    }
+                },
+                error: function() {}
+            });
+        }, 5000);
+    }
+
+    function renderSplunkBrief(row) {
+        if (!row) return;
+        var time = row._time || "";
+        if (time === lastBriefTime) return;
+        lastBriefTime = time;
+
+        var host = (row["splunk_context.host"] || "unknown");
+        var signal = (row["signal_summary"] || "unknown event");
+        var tactic = (row["tactic_classification"] || "Unknown");
+        var ttp = (row["top_prediction.technique_id"] || "?");
+        var ttpName = (row["top_prediction.technique_name"] || "unknown");
+        var prob = parseFloat(row["top_prediction.probability"] || 0);
+        var probPct = Math.round(prob * 100);
+        var reasoning = (row["top_prediction.reasoning"] || "");
+        var confidence = (row["top_prediction.confidence_tier"] || "low");
+        var huntQuery = (row["top_prediction.splunk_hunting_query"] || "");
+        var defenderAction = (row["top_prediction.defender_action"] || "");
+
+        var probColor = probPct >= 60 ? "#FF0000" : probPct >= 30 ? "#f5a623" : "#808080";
+        var confColor = confidence === "high" ? "#FF0000" : confidence === "medium" ? "#f5a623" : "#808080";
+
+        povLog("<span class=\"rf-attacker\">[ATTACKER] Signal detected on <span class=\"rf-host\">" + host + "</span>: " + signal + "</span>", "rf-attacker");
+
+        setTimeout(function() {
+            povLog("<span class=\"rf-agent\">[AI AGENT] Classifying signal... MITRE tactic: <span class=\"rf-tactic\">" + tactic + "</span></span>", "rf-agent");
+        }, 600);
+
+        setTimeout(function() {
+            povLog("<span class=\"rf-agent\">[AI AGENT] Expanding attack game tree. Evaluating next moves using 697 MITRE techniques...</span>", "rf-info");
+        }, 1200);
+
+        setTimeout(function() {
+            povLog("<span class=\"rf-agent\">[AI AGENT] LLM re-scoring with local Ollama model. Adversarial probability assessment...</span>", "rf-info");
+        }, 1800);
+
+        setTimeout(function() {
+            povLog("<span class=\"rf-agent\">[AI AGENT] TOP PREDICTION: <span class=\"rf-tactic\">" + ttp + " " + ttpName + "</span></span>", "rf-agent");
+            povLog("<span style=\"color:" + probColor + "\" class=\"rf-prob\">[AI AGENT] Probability: " + probPct + "% | Confidence: <span style=\"color:" + confColor + "\">" + confidence + "</span></span>", "rf-info");
+        }, 2400);
+
+        setTimeout(function() {
+            povLog("<span class=\"rf-agent\">[AI REASONING] " + reasoning + "</span>", "rf-info");
+        }, 3000);
+
+        setTimeout(function() {
+            povLog("<div class=\"rf-action\">[DEFENDER ACTION] " + defenderAction + "</div>", "rf-action");
+        }, 3600);
+
+        setTimeout(function() {
+            povLog("<div class=\"rf-action\">[SPL HUNT QUERY] " + huntQuery + "</div>", "rf-action");
+        }, 4200);
+
+        setTimeout(function() {
+            povLog("<span class=\"rf-info\">[SYSTEM] Brief written to Splunk. Episode stored in ChromaDB. Awaiting next signal...</span>", "rf-info");
+            $("#rf_pov_status").text("monitoring @ " + new Date().toLocaleTimeString());
+        }, 4800);
+    }
+
+    setTimeout(function() {
+        initPovTerminal();
+        watchForNewBriefs();
+    }, 2000);
 });
-
-
-
-

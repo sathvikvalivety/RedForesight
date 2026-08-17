@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List
 
 from memory.vector_store import VectorStore
@@ -67,7 +67,7 @@ class EpisodicMemory:
             episode = IncidentEpisode.model_validate_json(record["document"])
             episode.confirmed_technique_id = confirmed_technique_id
             episode.outcome_confirmed = outcome_confirmed
-            episode.closed_at = datetime.utcnow()
+            episode.closed_at = datetime.now(timezone.utc)
             
             episode_json = episode.model_dump_json()
             metadata = record["metadata"]
@@ -93,3 +93,4 @@ class EpisodicMemory:
 
     def count(self) -> int:
         return self.vector_store.count()
+

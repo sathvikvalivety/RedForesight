@@ -1,14 +1,14 @@
-<dashboard version="1.1" theme="dark" script="feedback.js">
-  <label>RedForesight — Predictive Threat Intelligence</label>
-  <description>AI-driven next-move predictions for Active Directory attacks.</description>
-  
+<dashboard version="1.1" theme="dark" script="feedback_v2.js">
+  <label>RedForesight — Predictions</label>
+  <description>Ranked next-move predictions from the red-team AI agent, written back from Splunk.</description>
+
   <row>
     <panel>
       <html>
-        <div style="text-align: center; padding: 10px;">
-          <h1>RedForesight — Predictive Threat Intelligence</h1>
-          <h3>AI-driven next-move predictions for Active Directory attacks.</h3>
-          <p><strong>Live Episode Count:</strong> <span id="live_episode_count">Loading...</span></p>
+        <style>#live_episode_count{font-size:20px;color:#e94560;font-weight:700}</style>
+        <div style="display:flex;gap:30px;align-items:center;padding:10px 14px;background:#0f3460;border-radius:6px">
+          <div><div style="font-size:11px;color:#aeb8fe;text-transform:uppercase">Episodes in Memory</div><span id="live_episode_count">…</span></div>
+          <div style="font-size:12px;color:#fff;opacity:.8">Polling FastAPI /health every 5s</div>
         </div>
       </html>
     </panel>
@@ -19,29 +19,32 @@
       <title>Recent Defender Briefs</title>
       <table>
         <search>
-          <query>
-            index=main sourcetype=_json source=redforesight_agent 
-            | spath brief_id
-            | spath tactic_classification 
-            | spath top_prediction.technique_id 
-            | spath top_prediction.technique_name 
-            | spath top_prediction.probability
-            | spath top_prediction.reasoning
-            | spath top_prediction.confidence_tier 
-            | spath signal_summary 
-            | eval Reasoning=substr('top_prediction.reasoning', 1, 150) . "..."
-            | table _time, brief_id, signal_summary, tactic_classification, top_prediction.technique_id, top_prediction.technique_name, top_prediction.probability, top_prediction.confidence_tier, Reasoning 
-            | rename brief_id as "Episode ID", signal_summary as "Signal", tactic_classification as "Tactic", top_prediction.technique_id as "Predicted Technique", top_prediction.technique_name as "Technique Name", top_prediction.probability as "Probability", top_prediction.confidence_tier as "Confidence"
-            | sort - _time
-          </query>
+          <query>index=main sourcetype=_json source=redforesight_agent
+| spath brief_id
+| spath signal_summary
+| spath tactic_classification
+| spath top_prediction.technique_id
+| spath top_prediction.technique_name
+| spath top_prediction.probability
+| spath top_prediction.reasoning
+| spath top_prediction.confidence_tier
+| eval Reasoning=substr('top_prediction.reasoning',1,140)."…"
+| eval Prob=round('top_prediction.probability'*100,1)."%"
+| table _time, brief_id, signal_summary, tactic_classification, top_prediction.technique_id, top_prediction.technique_name, Prob, top_prediction.confidence_tier, Reasoning
+| rename brief_id AS "Episode ID", signal_summary AS "Signal", tactic_classification AS "Tactic", top_prediction.technique_id AS "Predicted TTP", top_prediction.technique_name AS "Technique", Prob AS "Probability", top_prediction.confidence_tier AS "Confidence", Reasoning AS "LLM Reasoning"
+| sort - _time</query>
           <earliest>-24h@h</earliest>
           <latest>now</latest>
         </search>
-        <option name="drilldown">row</option>
+        <option name="refresh">10s</option>
         <option name="refresh.display">progressbar</option>
+        <option name="drilldown">row</option>
         <format type="color" field="Probability">
           <colorPalette type="list">[#808080,#FFBF00,#FF0000]</colorPalette>
-          <scale type="threshold">0.3,0.6</scale>
+          <scale type="threshold">30,60</scale>
+        </format>
+        <format type="color" field="Confidence">
+          <colorPalette type="map">{"high":#FF0000,"medium":#FFBF00,"low":#808080}</colorPalette>
         </format>
       </table>
     </panel>
@@ -49,24 +52,31 @@
 
   <row>
     <panel>
-      <title>Feedback Form</title>
-      <html>
-        <div>
-          <p>Confirm or Reject the top prediction for an episode:</p>
-          <div id="feedbackFormContainer">
-            <label for="episode_id">Episode ID:</label><br/>
-            <input type="text" id="episode_id" name="episode_id" style="width:300px;"/><br/><br/>
-            <label for="technique_id">Confirmed Technique ID:</label><br/>
-            <input type="text" id="technique_id" name="confirmed_technique_id" style="width:300px;"/><br/><br/>
-            <label for="outcome">Outcome Confirmed?</label><br/>
-            <select id="outcome" name="outcome_confirmed">
-              <option value="true">True (Predicted Correctly)</option>
-              <option value="false">False (Prediction Incorrect)</option>
-            </select><br/><br/>
-            <button id="submitFeedbackBtn" class="btn btn-primary">Submit Feedback</button>
-          </div>
-        </div>
-      </html>
+      <title>All Ranked Predictions per Brief</title>
+      <table>
+        <search>
+          <query>index=main sourcetype=_json source=redforesight_agent
+| spath brief_id
+| spath ranked_predictions{}.technique_id AS tech_id
+| spath ranked_predictions{}.technique_name AS tech_name
+| spath ranked_predictions{}.tactic AS tech_tactic
+| spath ranked_predictions{}.probability AS tech_prob
+| spath ranked_predictions{}.splunk_hunting_query AS hunt
+| eval Prob=round(tech_prob*100,1)."%"
+| table _time, brief_id, tech_id, tech_name, tech_tactic, Prob, hunt
+| rename brief_id AS "Episode", tech_id AS "TTP", tech_name AS "Technique", tech_tactic AS "Tactic", Prob AS "Probability", hunt AS "SPL Hunting Query"
+| sort - _time, Prob</query>
+          <earliest>-24h@h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="refresh">10s</option>
+        <option name="drilldown">row</option>
+        <format type="color" field="Probability">
+          <colorPalette type="list">[#808080,#FFBF00,#FF0000]</colorPalette>
+          <scale type="threshold">30,60</scale>
+        </format>
+      </table>
     </panel>
   </row>
 </dashboard>
+

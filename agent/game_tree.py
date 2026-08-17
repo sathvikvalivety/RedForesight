@@ -30,7 +30,7 @@ class GameTree:
         self.agent_memory = agent_memory
         self.vector_store = vector_store
         
-        self.depth = int(os.getenv("GAME_TREE_DEPTH", "1"))
+        self.depth = int(os.getenv("GAME_TREE_DEPTH", "3"))
         self.prune_threshold = float(os.getenv("PROBABILITY_PRUNE_THRESHOLD", "0.15"))
         self.max_predictions = int(os.getenv("MAX_PREDICTIONS", "5"))
 
@@ -115,3 +115,4 @@ class GameTree:
             dist = res[0].get("distance")
             return max(0.0, 1.0 - dist)
         return 0.5
+

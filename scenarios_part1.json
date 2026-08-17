@@ -1,0 +1,42 @@
+{
+  "t1566_001": {
+    "event_type": "initial_access_attempt",
+    "sev": "critical",
+    "raw": "Phishing email with malicious macro-laden Office document Invoice_Urgent.docm opened by user, WINWORD.EXE spawned powershell.exe with encoded payload."
+  },
+  "t1566_002": {
+    "event_type": "initial_access_attempt",
+    "sev": "high",
+    "raw": "Spearphishing link clicked by user - browser redirected to malicious URL hosting exploit kit, suspicious JavaScript execution detected in Edge browser process."
+  },
+  "t1190": {
+    "event_type": "initial_access_attempt",
+    "sev": "critical",
+    "raw": "Exploit attempt against public-facing web server - Apache log shows CVE-2021-44228 Log4Shell JNDI lookup payload in HTTP User-Agent header."
+  },
+  "t1078": {
+    "event_type": "initial_access_attempt",
+    "sev": "high",
+    "raw": "Valid account authentication observed from anomalous geographic IP - admin account logged in from 185.220.101.0/24 Tor exit node, no prior history from this ASN."
+  },
+  "t1133": {
+    "event_type": "initial_access_attempt",
+    "sev": "high",
+    "raw": "External remote services abuse - VPN gateway logged successful authentication for service account svc_backup from new device fingerprint, no MFA challenge issued."
+  },
+  "t1195": {
+    "event_type": "supply_chain_compromise",
+    "sev": "critical",
+    "raw": "Compromised software supply chain - npm package node-uuid version 8.4.1 found to contain postinstall script downloading payload from 45.155.205.233, detected during CI pipeline scan."
+  },
+  "t1199": {
+    "event_type": "trusted_relationship_abuse",
+    "sev": "high",
+    "raw": "Trusted relationship abuse - managed service provider account msp-admin authenticated to customer tenant, performed mass Mailbox permission changes outside business hours."
+  },
+  "t1098_001": {
+    "event_type": "account_manipulation",
+    "sev": "high",
+    "raw": "Additional cloud credentials - Azure AD audit log shows new service principal created by compromised admin with API permissions Mail.ReadWrite and Files.Read.All."
+  }
+}

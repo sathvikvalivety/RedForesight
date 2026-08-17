@@ -20,7 +20,7 @@ class LLMClient:
         if not self.provider:
             raise ValueError("LLM_PROVIDER must be configured in .env")
             
-        self.client = httpx.AsyncClient(timeout=60.0)
+        self.client = httpx.AsyncClient(timeout=120.0)
         
         self.system_prompt = """You are a red team operator simulating an advanced persistent threat actor.
 You have just observed an attack technique being executed against a target
@@ -128,7 +128,7 @@ Return ONLY this JSON array with no other text:
                 {"role": "user", "content": user_prompt}
             ],
             "stream": False,
-            "options": {"temperature": 0.3}
+            "options": {"temperature": 0.3, "num_ctx": 2048, "num_predict": 256}
         }
         resp = await self.client.post(url, json=payload)
         resp.raise_for_status()
@@ -205,3 +205,10 @@ Return ONLY this JSON array with no other text:
 
     async def close(self):
         await self.client.aclose()
+
+
+
+
+
+
+
