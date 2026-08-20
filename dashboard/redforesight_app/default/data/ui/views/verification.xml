@@ -1,4 +1,4 @@
-<dashboard version="1.1" theme="dark" script="feedback_v2.js">
+<dashboard version="1.1" theme="dark" script="feedback_v3.js">
   <label>RedForesight — Verification &amp; Feedback</label>
   <description>Confirm or reject predictions so episodic memory learns the real outcome.</description>
 
@@ -68,5 +68,6 @@
     </panel>
   </row>
 </dashboard>
+
 
 

@@ -75,5 +75,37 @@ def generate_hunting_query(technique_id: str, technique_name: str, index: str = 
     technique_id = sanitize_spl(technique_id)
     technique_name = sanitize_spl(technique_name)
     # Use wildcards to catch references to the ID or name in the raw logs
-    # DEMO TWEAK: Appending "*credential*" to guarantee visual hits in the botsv3 dataset for the video
-    return f'search index={index} ("*{technique_id}*" OR "*{technique_name}*" OR "*credential*")'
+    # Build technique-specific hunting query based on the technique
+    hunt_keywords = {
+        "T1003": "EventCode=10 lsass",
+        "T1059": "EventCode=4104 powershell",
+        "T1566": "EventCode=1 winword.exe",
+        "T1021": "EventCode=4624 LogonType",
+        "T1190": "http exploit jndi",
+        "T1486": "vssadmin encrypt",
+        "T1574": "EventCode=7 dll load",
+        "T1547": "EventCode=13 Run registry",
+        "T1548": "fodhelper uac",
+        "T1562": "Set-MpPreference Defender",
+        "T1070": "wevtutil clear eventlog",
+        "T1053": "schtasks create",
+        "T1110": "EventCode=4625 failed",
+        "T1558": "EventCode=4769 kerberos",
+        "T1087": "net user domain",
+        "T1046": "nmap scan port",
+        "T1005": "robocopy file access",
+        "T1071": "dns query TXT",
+        "T1041": "https upload exfil",
+        "T1048": "dns TXT exfil",
+        "T1490": "vssadmin delete shadow",
+        "T1529": "shutdown restart",
+    }
+    # Find matching keyword for this technique
+    keyword = technique_name.lower().split()[0] if technique_name else "unknown"
+    for tid, kw in hunt_keywords.items():
+        if technique_id.startswith(tid):
+            keyword = kw
+            break
+    return f'search index={index} ("*{technique_id}*" OR "*{technique_name}*" OR "*{keyword}*") | head 20'
+
+

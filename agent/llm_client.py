@@ -16,56 +16,37 @@ class LLMClient:
         self.ollama_base_url = os.getenv("OLLAMA_BASE_URL")
         self.ollama_model = os.getenv("OLLAMA_MODEL")
         self.anthropic_key = os.getenv("ANTHROPIC_API_KEY")
-        
+
         if not self.provider:
             raise ValueError("LLM_PROVIDER must be configured in .env")
-            
+
         self.client = httpx.AsyncClient(timeout=120.0)
-        
+
         self.system_prompt = """You are a red team operator simulating an advanced persistent threat actor.
-You have just observed an attack technique being executed against a target
-environment. Your goal is to assess which follow-on techniques the attacker
-is most likely to execute next, based on the observed signal, environmental
-context, and standard adversarial tradecraft.
+You observe an attack technique and assess which follow-on techniques the attacker will execute next.
 
-Think like an attacker. Consider:
-- What credentials or access has the attacker likely gained?
-- What is the path of least resistance to their objective?
-- Which techniques leave the least forensic evidence?
-- Which techniques are most commonly chained after the observed one?
+Return ONLY a valid JSON array with one entry per technique_id provided.
+Each entry must have: technique_id, llm_probability (0.0-1.0), llm_reasoning, llm_explanation, llm_mitigation.
 
-Return ONLY a valid JSON array. No preamble, no explanation, no markdown
-code fences. The array must contain objects with exactly these fields:
-technique_id, llm_probability (float 0.0-1.0), llm_reasoning (string)."""
+llm_explanation: 2-3 plain English sentences explaining what the attacker will do and why.
+llm_mitigation: 1-2 concrete actions the security team should take.
+
+Use the EXACT technique_id values provided. Return ALL candidates."""
 
     async def score_moves(self, signal: ObservedSignal, context: SplunkContext, candidate_moves: List[PredictedMove]) -> List[PredictedMove]:
         if not candidate_moves:
             return []
-            
-        moves_list = "\n".join([f"- {m.technique_id} | {m.technique_name} | {m.tactic} | current_score={m.probability:.3f}" for m in candidate_moves])
-        
-        user_prompt = f"""Observed signal:
-  Host: {signal.host}
-  Event: {signal.raw_event}
-  Type: {signal.event_type}
-  Severity: {signal.severity}
 
-Environment context:
-  Process events in last 30 min: {len(context.process_events)}
-  Auth events in last 30 min: {len(context.auth_events)}
-  Network events in last 30 min: {len(context.network_events)}
-  Asset criticality: {context.asset_criticality or 'unknown'}
+        moves_list = "\n".join([f"{m.technique_id}: {m.technique_name} ({m.tactic}, score={m.probability:.3f})" for m in candidate_moves])
 
-Candidate next moves to score:
-{moves_list}
-
-For each technique_id above, return your adversarial probability assessment.
-Focus on what an attacker would realistically do next given this specific signal.
-
-Return ONLY this JSON array with no other text:
-[
-  {{"technique_id": "T1069.001", "llm_probability": 0.82, "llm_reasoning": "After credential dumping, local group enumeration identifies privilege boundaries and targets for lateral movement."}}
-]"""
+        user_prompt = (
+            f"Observed signal on {signal.host}:\n"
+            f"  Event: {signal.raw_event}\n"
+            f"  Type: {signal.event_type}\n"
+            f"  Severity: {signal.severity}\n\n"
+            f"Candidate next moves to score (return one entry for EACH):\n{moves_list}\n\n"
+            f"Return ONLY a JSON array with entries for each technique_id above."
+        )
 
         try:
             if self.provider == "gemini":
@@ -75,140 +56,92 @@ Return ONLY this JSON array with no other text:
             elif self.provider == "anthropic":
                 return await self._score_with_anthropic(self.system_prompt, user_prompt, candidate_moves)
             else:
-                logger.warning(f"Unknown LLM_PROVIDER '{self.provider}'. Falling back to original moves.")
+                logger.warning(f"Unknown LLM_PROVIDER '{self.provider}'. Falling back.")
                 return candidate_moves
         except Exception as e:
             logger.warning(f"LLM scoring failed ({self.provider}): {e}. Returning original moves.")
             return candidate_moves
 
-    async def _score_with_gemini(self, system_prompt: str, user_prompt: str, original_moves: List[PredictedMove]) -> List[PredictedMove]:
+    async def _score_with_gemini(self, system_prompt, user_prompt, original_moves):
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
             raise ValueError("GEMINI_API_KEY is not set.")
-        if not self.gemini_model:
-            raise ValueError("GEMINI_MODEL is not set.")
-            
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.gemini_model}:generateContent"
-        headers = {"x-goog-api-key": api_key}
-        payload = {
-            "contents": [
-                {
-                    "parts": [
-                        {
-                            "text": f"{system_prompt}\n\n---\n\n{user_prompt}"
-                        }
-                    ]
-                }
-            ],
-            "generationConfig": {
-                "temperature": 0.3,
-                "maxOutputTokens": 8000,
-                "responseMimeType": "application/json"
-            }
-        }
-        resp = await self.client.post(url, headers=headers, json=payload)
+        payload = {"contents": [{"parts": [{"text": f"{system_prompt}\n\n{user_prompt}"}]}], "generationConfig": {"temperature": 0.3, "maxOutputTokens": 8000, "responseMimeType": "application/json"}}
+        resp = await self.client.post(url, headers={"x-goog-api-key": api_key}, json=payload)
         resp.raise_for_status()
-        try:
-            data = resp.json()
-            text = data["candidates"][0]["content"]["parts"][0]["text"]
-            return self._parse_llm_response(text, original_moves)
-        except (json.JSONDecodeError, KeyError, IndexError) as e:
-            logger.warning(f"Failed to parse JSON response from Gemini: {e}")
-            return original_moves
+        text = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+        return self._parse_llm_response(text, original_moves)
 
-    async def _score_with_ollama(self, system_prompt: str, user_prompt: str, original_moves: List[PredictedMove]) -> List[PredictedMove]:
+    async def _score_with_ollama(self, system_prompt, user_prompt, original_moves):
         if not self.ollama_base_url or not self.ollama_model:
             raise ValueError("OLLAMA_BASE_URL and OLLAMA_MODEL must be set.")
-            
         url = f"{self.ollama_base_url}/api/chat"
-        payload = {
-            "model": self.ollama_model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ],
-            "stream": False,
-            "options": {"temperature": 0.3, "num_ctx": 2048, "num_predict": 256}
-        }
+        payload = {"model": self.ollama_model, "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}], "stream": False, "options": {"temperature": 0.3, "num_ctx": 4096, "num_predict": 1024}}
         resp = await self.client.post(url, json=payload)
         resp.raise_for_status()
-        try:
-            text = resp.json()["message"]["content"]
-            return self._parse_llm_response(text, original_moves)
-        except (json.JSONDecodeError, KeyError) as e:
-            logger.warning(f"Failed to parse JSON response from Ollama: {e}")
-            return original_moves
+        text = resp.json()["message"]["content"]
+        return self._parse_llm_response(text, original_moves)
 
-    async def _score_with_anthropic(self, system_prompt: str, user_prompt: str, original_moves: List[PredictedMove]) -> List[PredictedMove]:
+    async def _score_with_anthropic(self, system_prompt, user_prompt, original_moves):
         if not self.anthropic_key:
             raise ValueError("ANTHROPIC_API_KEY is not set.")
         url = "https://api.anthropic.com/v1/messages"
-        headers = {
-            "x-api-key": self.anthropic_key,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json"
-        }
-        payload = {
-            "model": "claude-3-5-haiku-20241022",
-            "max_tokens": 1000,
-            "system": system_prompt,
-            "messages": [
-                {"role": "user", "content": user_prompt}
-            ]
-        }
+        headers = {"x-api-key": self.anthropic_key, "anthropic-version": "2023-06-01", "content-type": "application/json"}
+        payload = {"model": "claude-3-5-haiku-20241022", "max_tokens": 2000, "system": system_prompt, "messages": [{"role": "user", "content": user_prompt}]}
         resp = await self.client.post(url, headers=headers, json=payload)
         resp.raise_for_status()
-        try:
-            text = resp.json()["content"][0]["text"]
-            return self._parse_llm_response(text, original_moves)
-        except (json.JSONDecodeError, KeyError, IndexError) as e:
-            logger.warning(f"Failed to parse JSON response from Anthropic: {e}")
-            return original_moves
+        text = resp.json()["content"][0]["text"]
+        return self._parse_llm_response(text, original_moves)
 
-    def _parse_llm_response(self, text: str, original_moves: List[PredictedMove]) -> List[PredictedMove]:
-        # Strip markdown fences
+    def _parse_llm_response(self, text, original_moves):
         text = text.strip()
         if text.startswith("```"):
-            lines = text.split('\n')
+            lines = text.split("\n")
             if len(lines) > 1 and lines[0].startswith("```"):
                 lines = lines[1:]
-            if len(lines) > 0 and lines[-1].strip() == "```":
+            if lines and lines[-1].strip() == "```":
                 lines = lines[:-1]
             text = "\n".join(lines).strip()
-            
-        # Find JSON array
-        start_idx = text.find('[')
-        end_idx = text.rfind(']')
+
+        start_idx = text.find("[")
+        end_idx = text.rfind("]")
         if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
             text = text[start_idx:end_idx+1]
-            
+
         try:
             data = json.loads(text)
-            updates = {item["technique_id"]: item for item in data if "technique_id" in item}
-            
-            # Update the original moves (do not re-sort here)
+            # Build lookup by technique_id and also by technique name
+            id_map = {}
+            for item in data:
+                tid = item.get("technique_id", "")
+                id_map[tid] = item
+
             for move in original_moves:
-                if move.technique_id in updates:
-                    update_data = updates[move.technique_id]
-                    if "llm_probability" in update_data:
+                update = id_map.get(move.technique_id)
+                if not update:
+                    # Try fuzzy match by technique name in reasoning
+                    for item in data:
+                        if move.technique_name.lower() in str(item.get("llm_reasoning", "")).lower():
+                            update = item
+                            break
+                if update:
+                    if "llm_probability" in update:
                         try:
-                            move.probability = float(update_data["llm_probability"])
-                        except ValueError:
+                            move.probability = float(update["llm_probability"])
+                        except (ValueError, TypeError):
                             pass
-                    if "llm_reasoning" in update_data:
-                        move.reasoning = str(update_data["llm_reasoning"])
-                        
+                    if "llm_reasoning" in update:
+                        move.reasoning = str(update["llm_reasoning"])
+                    if "llm_explanation" in update:
+                        move.defender_action = str(update["llm_explanation"])
+                    if "llm_mitigation" in update:
+                        move.splunk_hunting_query = "MITIGATION: " + str(update["llm_mitigation"])
+
             return original_moves
         except json.JSONDecodeError:
-            logger.warning(f"Failed to parse JSON from LLM: {text}")
+            logger.warning(f"Failed to parse JSON from LLM: {text[:200]}")
             return original_moves
 
     async def close(self):
         await self.client.aclose()
-
-
-
-
-
-
-

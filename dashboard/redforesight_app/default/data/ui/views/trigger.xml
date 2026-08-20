@@ -1,4 +1,4 @@
-<dashboard version="1.1" theme="dark" script="feedback_v2.js">
+<dashboard version="1.1" theme="dark" script="feedback_v3.js">
   <label>RedForesight — Trigger Attack</label>
   <description>Fire an attacker signal into the RedForesight agent and watch the prediction pipeline respond live.</description>
 
@@ -122,3 +122,4 @@
     </panel>
   </row>
 </dashboard>
+

@@ -1,4 +1,4 @@
-<dashboard version="1.1" theme="dark" script="feedback_v2.js">
+<dashboard version="1.1" theme="dark" script="feedback_v3.js">
   <label>RedForesight — Predictions</label>
   <description>Ranked next-move predictions from the red-team AI agent, written back from Splunk.</description>
 
@@ -79,4 +79,5 @@
     </panel>
   </row>
 </dashboard>
+
 

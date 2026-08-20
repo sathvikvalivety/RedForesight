@@ -19,7 +19,7 @@ KILL_CHAIN_NEXT = {
     "Collection":            ["Command and Control", "Exfiltration"],
     "Command and Control":   ["Exfiltration", "Impact"],
     "Exfiltration":          ["Impact"],
-    "Impact":                [],
+    "Impact":                ["Defense Evasion", "Credential Access", "Persistence"],
     "Reconnaissance":        ["Initial Access", "Resource Development"],
     "Resource Development":  ["Initial Access"],
     "Unknown":               ["Execution", "Persistence", "Discovery"],
@@ -115,4 +115,5 @@ class GameTree:
             dist = res[0].get("distance")
             return max(0.0, 1.0 - dist)
         return 0.5
+
 
