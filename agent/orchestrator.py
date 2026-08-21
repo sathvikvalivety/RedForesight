@@ -1,4 +1,4 @@
-from typing import TypedDict, List, Optional
+from typing import TypedDict, List, Optional, Callable, Any
 from uuid import uuid4
 from langgraph.graph import StateGraph, START, END
 from agent.schemas import ObservedSignal, SplunkContext, PredictedMove, DefenderBrief, IncidentEpisode
@@ -10,6 +10,7 @@ from splunk.mcp_client import SplunkMCPClient
 from splunk.spl_templates import host_activity_summary
 from datetime import datetime, timezone
 import os
+import inspect
 
 class AgentState(TypedDict):
     signal: ObservedSignal
@@ -23,20 +24,37 @@ class AgentState(TypedDict):
     errors: List[str]
 
 
-def build_graph(mcp_client: SplunkMCPClient, agent_memory: AgentMemory, game_tree: GameTree, classifier: TacticClassifier, llm_client: LLMClient):
+def build_graph(
+    mcp_client: SplunkMCPClient,
+    agent_memory: AgentMemory,
+    game_tree: GameTree,
+    classifier: TacticClassifier,
+    llm_client: LLMClient,
+    progress_callback: Optional[Callable[[int, str, str], Any]] = None
+):
+    async def notify(step: int, step_name: str, log_msg: str):
+        if progress_callback:
+            try:
+                res = progress_callback(step, step_name, log_msg)
+                if inspect.isawaitable(res):
+                    await res
+            except Exception as e:
+                pass
     
     async def ingest_signal(state: AgentState) -> AgentState:
+        signal = state["signal"]
         if not state.get("episode_id"):
             state["episode_id"] = str(uuid4())
+        await notify(1, "Ingest Signal", f"Received attack signal from host {signal.host}: {signal.event_type} ({signal.severity} severity)")
         return state
 
     async def pull_splunk_context(state: AgentState) -> AgentState:
         signal = state["signal"]
         errors = state.get("errors", [])
         
+        await notify(2, "Pull Splunk Context", f"Querying Splunk MCP Server for {signal.host} process & auth telemetry (60m window)...")
         query = host_activity_summary(signal.host, 60)
         
-        # We will still pull the basic search, but also pull the full context
         result = await mcp_client.search(query)
         context_data = await mcp_client.pull_host_context(signal.host, 60)
         
@@ -64,6 +82,7 @@ def build_graph(mcp_client: SplunkMCPClient, agent_memory: AgentMemory, game_tre
                 host_summary=[],
                 raw_results={}
             )
+            await notify(2, "Pull Splunk Context", f"Splunk MCP lookup fallback used. Context initialized for {signal.host}.")
         else:
             context = SplunkContext(
                 host=signal.host,
@@ -74,6 +93,7 @@ def build_graph(mcp_client: SplunkMCPClient, agent_memory: AgentMemory, game_tre
                 host_summary=host_sum if isinstance(host_sum, list) else [],
                 raw_results={"data": result.data}
             )
+            await notify(2, "Pull Splunk Context", f"Retrieved Splunk context ({context.total_events} events) for {signal.host}.")
             
         state["splunk_context"] = context
         state["errors"] = errors
@@ -81,30 +101,35 @@ def build_graph(mcp_client: SplunkMCPClient, agent_memory: AgentMemory, game_tre
 
     async def classify_tactic(state: AgentState) -> AgentState:
         signal = state["signal"]
+        await notify(3, "Classify Tactic", f"Analyzing event payload against MITRE ATT&CK tactic taxonomy...")
         tactic, tactic_id, conf = await classifier.classify(signal)
         state["tactic_classification"] = tactic
         state["tactic_id"] = tactic_id
         state["tactic_confidence"] = conf
+        await notify(3, "Classify Tactic", f"Tactic classified: {tactic} [{tactic_id}] (Confidence: {conf:.2f})")
         return state
 
     async def expand_game_tree(state: AgentState) -> AgentState:
         signal = state["signal"]
         tactic = state["tactic_classification"]
         context = state["splunk_context"]
+        await notify(4, "Expand Game Tree", f"Searching MITRE ATT&CK semantic database (697 techniques) for candidate next moves under '{tactic}'...")
         moves = await game_tree.expand(signal, tactic, context)
         state["scored_moves"] = moves
+        await notify(4, "Expand Game Tree", f"Identified {len(moves)} candidate next-move techniques.")
         return state
 
     async def score_and_prune(state: AgentState) -> AgentState:
         moves = state.get("scored_moves")
         if not moves:
             state["scored_moves"] = []
+            await notify(5, "LLM Re-Score", "No candidate moves found to score.")
             return state
             
         signal = state.get("signal")
         context = state.get("splunk_context")
         
-        print(f"[score_and_prune] Re-scoring {len(moves)} moves with LLM provider: {llm_client.provider}")
+        await notify(5, "LLM Re-Score", f"Re-scoring {len(moves)} moves with LLM engine ({llm_client.provider})...")
         
         scored = await llm_client.score_moves(signal, context, moves)
         
@@ -135,6 +160,9 @@ def build_graph(mcp_client: SplunkMCPClient, agent_memory: AgentMemory, game_tre
         pruned = pruned[:max_preds]
         
         state["scored_moves"] = pruned
+        top_name = pruned[0].technique_name if pruned else "None"
+        top_prob = int(pruned[0].probability * 100) if pruned else 0
+        await notify(5, "LLM Re-Score", f"Scored & normalized moves. Top prediction: {top_name} ({top_prob}%).")
         return state
 
     async def generate_brief(state: AgentState) -> AgentState:
@@ -142,6 +170,7 @@ def build_graph(mcp_client: SplunkMCPClient, agent_memory: AgentMemory, game_tre
         context = state["splunk_context"]
         moves = state.get("scored_moves") or []
         
+        await notify(6, "Generate Brief", "Building Defender Brief and persisting incident episode in memory...")
         top_prediction = moves[0] if moves else None
         
         episode_id_obj = uuid4()
@@ -167,6 +196,7 @@ def build_graph(mcp_client: SplunkMCPClient, agent_memory: AgentMemory, game_tre
             created_at=datetime.now(timezone.utc)
         )
         await agent_memory.store_episode(episode)
+        await notify(6, "Generate Brief", f"Brief completed! Episode {str(episode_id_obj)[:8]} stored in ChromaDB.")
         
         return state
 
@@ -188,8 +218,16 @@ def build_graph(mcp_client: SplunkMCPClient, agent_memory: AgentMemory, game_tre
     
     return builder.compile()
 
-async def run_agent(signal: ObservedSignal, mcp_client: SplunkMCPClient, agent_memory: AgentMemory, game_tree: GameTree, classifier: TacticClassifier, llm_client: LLMClient) -> DefenderBrief:
-    graph = build_graph(mcp_client, agent_memory, game_tree, classifier, llm_client)
+async def run_agent(
+    signal: ObservedSignal,
+    mcp_client: SplunkMCPClient,
+    agent_memory: AgentMemory,
+    game_tree: GameTree,
+    classifier: TacticClassifier,
+    llm_client: LLMClient,
+    progress_callback: Optional[Callable[[int, str, str], Any]] = None
+) -> DefenderBrief:
+    graph = build_graph(mcp_client, agent_memory, game_tree, classifier, llm_client, progress_callback)
     
     initial_state = {
         "signal": signal,

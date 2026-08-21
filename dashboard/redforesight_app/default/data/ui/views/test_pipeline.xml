@@ -1,4 +1,4 @@
-<dashboard version="1.1" theme="dark" script="feedback_v2.js">
+<dashboard version="1.1" theme="dark" script="feedback_v3.js">
   <label>RedForesight — Test &amp; Verify Pipeline</label>
   <description>Health and integrity checks across the agent, memory, and Splunk layers.</description>
 
@@ -83,4 +83,5 @@ Demo trigger (PowerShell): .\scripts\demo_trigger.ps1
     </panel>
   </row>
 </dashboard>
+
 

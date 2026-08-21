@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>RedForesight - Live Pipeline Graph</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0e14;color:#fff;font-family:"Segoe UI",Arial,sans-serif;overflow:hidden}
+#header{background:linear-gradient(135deg,#1a1a2e,#16213e);padding:14px 24px;display:flex;align-items:center;gap:12px;border-bottom:2px solid #e94560}
+#header .logo{width:36px;height:36px;background:#e94560;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:18px}
+#header h1{font-size:18px;color:#e94560}
+#header .sub{color:#aeb8fe;font-size:13px;margin-left:8px}
+#header .status{margin-left:auto;padding:6px 16px;border-radius:20px;font-size:12px;background:#1a1a2e;color:#aeb8fe}
+#graph-area{width:100%;height:calc(100vh - 120px);padding:14px;overflow-y:auto}
+.terminal{position:fixed;bottom:0;left:0;right:0;height:110px;background:#0a0e14;border-top:2px solid #1a1a2e;padding:10px 20px;overflow-y:auto;font-family:monospace;font-size:12px;color:#a0a0a0;z-index:100}
+.terminal .line{margin:2px 0}
+.terminal .attacker{color:#f5a623}
+.terminal .agent{color:#3ad29f}
+.terminal .warning{color:#FF0000}
+.terminal .info{color:#aeb8fe}
+svg{width:100%;height:100%;min-height:600px}
+</style>
+</head>
+<body>
+<div id="header">
+  <div class="logo">R</div>
+  <h1>RedForesight Live Pipeline Graph</h1>
+  <span class="sub">Real-time AI agent visualization</span>
+  <div class="status" id="status">connecting...</div>
+</div>
+<div id="graph-area">
+  <svg id="canvas"><defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><polygon points="0,0 10,3 0,6" fill="#666"/></marker></defs></svg>
+</div>
+<div class="terminal" id="terminal"></div>
+<script>
+var svgNS="http://www.w3.org/2000/svg";
+var svg=document.getElementById("canvas");
+var termEl=document.getElementById("terminal");
+var statusEl=document.getElementById("status");
+
+var pipeline=[
+  {id:"signal",label:"Attack Signal",x:20,y:10,w:240,h:80,sub:""},
+  {id:"ingest",label:"1. Ingest Signal",x:20,y:120,w:240,h:55,sub:"LangGraph START"},
+  {id:"splunk",label:"2. Pull Splunk Context",x:20,y:210,w:240,h:55,sub:"MCP / HEC queries"},
+  {id:"classify",label:"3. Classify Tactic",x:20,y:300,w:240,h:55,sub:"MITRE ATT&CK match"},
+  {id:"gametree",label:"4. Expand Game Tree",x:20,y:390,w:240,h:55,sub:"Kill-chain next tactics"},
+  {id:"llm",label:"5. LLM Re-Score",x:20,y:480,w:240,h:55,sub:"Ollama qwen2.5-coder"},
+  {id:"brief",label:"6. Generate Brief",x:20,y:570,w:240,h:55,sub:"DefenderBrief + HEC write"}
+];
+
+var edges=[["signal","ingest"],["ingest","splunk"],["splunk","classify"],["classify","gametree"],["gametree","llm"],["llm","brief"]];
+
+var nodeState={};
+var predictions=[];
+var signalData=null;
+
+function renderGraph(){
+  // Clear all except defs
+  while(svg.children.length>1){svg.removeChild(svg.lastChild);}
+
+  // Draw edges
+  edges.forEach(function(pair){
+    var f=pipeline.find(function(p){return p.id===pair[0];});
+    var t=pipeline.find(function(p){return p.id===pair[1];});
+    var line=document.createElementNS(svgNS,"line");
+    line.setAttribute("x1",f.x+f.w/2);
+    line.setAttribute("y1",f.y+f.h);
+    line.setAttribute("x2",t.x+t.w/2);
+    line.setAttribute("y2",t.y);
+    line.setAttribute("stroke","#444");
+    line.setAttribute("stroke-width",2);
+    line.setAttribute("marker-end","url(#arrow)");
+    var fs=nodeState[f.id]||"pending";
+    var ts=nodeState[t.id]||"pending";
+    if(fs==="done"&&ts==="done"){line.setAttribute("stroke","#3ad29f");}
+    else if(fs==="done"&&ts==="active"){line.setAttribute("stroke","#f5a623");line.setAttribute("stroke-width",3);}
+    svg.appendChild(line);
+  });
+
+  // Draw nodes
+  pipeline.forEach(function(n){
+    var g=document.createElementNS(svgNS,"g");
+    var state=nodeState[n.id]||"pending";
+    var rect=document.createElementNS(svgNS,"rect");
+    rect.setAttribute("x",n.x);rect.setAttribute("y",n.y);
+    rect.setAttribute("width",n.w);rect.setAttribute("height",n.h);
+    rect.setAttribute("rx",8);rect.setAttribute("ry",8);
+    rect.setAttribute("stroke-width",2);
+    rect.setAttribute("style","transition: all 0.4s");
+    if(state==="done"){rect.setAttribute("fill","#1a3a2a");rect.setAttribute("stroke","#3ad29f");}
+    else if(state==="active"){rect.setAttribute("fill","#3a3a1a");rect.setAttribute("stroke","#f5a623");}
+    else{rect.setAttribute("fill","#1a1a2e");rect.setAttribute("stroke","#444");}
+    g.appendChild(rect);
+
+    var label=document.createElementNS(svgNS,"text");
+    label.setAttribute("x",n.x+n.w/2);label.setAttribute("y",n.y+26);
+    label.setAttribute("fill","#fff");label.setAttribute("font-size","13");
+    label.setAttribute("font-weight","600");label.setAttribute("text-anchor","middle");
+    label.textContent=n.label;
+    g.appendChild(label);
+
+    if(n.sub){
+      var sub=document.createElementNS(svgNS,"text");
+      sub.setAttribute("x",n.x+n.w/2);sub.setAttribute("y",n.y+46);
+      sub.setAttribute("fill","#aeb8fe");sub.setAttribute("font-size","10");
+      sub.setAttribute("text-anchor","middle");
+      sub.textContent=n.sub;
+      g.appendChild(sub);
+    }
+
+    // Show result text next to node
+    var resultKey=n.id+"Result";
+    if(nodeState[resultKey]){
+      var tr=document.createElementNS(svgNS,"text");
+      tr.setAttribute("x",n.x+n.w+14);tr.setAttribute("y",n.y+28);
+      tr.setAttribute("fill",n.id==="classify"?"#a78bfa":"#3ad29f");
+      tr.setAttribute("font-size","14");tr.setAttribute("font-weight","bold");
+      tr.textContent="\u2192 "+nodeState[resultKey];
+      g.appendChild(tr);
+    }
+
+    svg.appendChild(g);
+  });
+
+  // Draw signal box
+  if(signalData){
+    var sx=310,sy=10;
+    var g=document.createElementNS(svgNS,"g");
+    var rect=document.createElementNS(svgNS,"rect");
+    rect.setAttribute("x",sx);rect.setAttribute("y",sy);
+    rect.setAttribute("width",460);rect.setAttribute("height",85);
+    rect.setAttribute("rx",6);rect.setAttribute("ry",6);
+    rect.setAttribute("fill","#0f3460");rect.setAttribute("stroke","#e94560");
+    rect.setAttribute("stroke-width",2);
+    g.appendChild(rect);
+
+    var lbl=document.createElementNS(svgNS,"text");
+    lbl.setAttribute("x",sx+14);lbl.setAttribute("y",sy+22);
+    lbl.setAttribute("fill","#e94560");lbl.setAttribute("font-size","14");
+    lbl.setAttribute("font-weight","bold");
+    lbl.textContent="ATTACK SIGNAL";
+    g.appendChild(lbl);
+
+    var h=document.createElementNS(svgNS,"text");
+    h.setAttribute("x",sx+14);h.setAttribute("y",sy+44);
+    h.setAttribute("fill","#fff");h.setAttribute("font-size","13");
+    h.textContent="Host: "+(signalData.host||"?")+"  |  IP: "+(signalData.source_ip||"?")+"  |  Severity: "+(signalData.severity||"?");
+    g.appendChild(h);
+
+    var e=document.createElementNS(svgNS,"text");
+    e.setAttribute("x",sx+14);e.setAttribute("y",sy+62);
+    e.setAttribute("fill","#f5a623");e.setAttribute("font-size","12");
+    e.textContent="Type: "+(signalData.event_type||"?");
+    g.appendChild(e);
+
+    var rw=document.createElementNS(svgNS,"text");
+    rw.setAttribute("x",sx+14);rw.setAttribute("y",sy+78);
+    rw.setAttribute("fill","#aeb8fe");rw.setAttribute("font-size","11");
+    rw.textContent=(signalData.raw_event||"").substring(0,65)+"...";
+    g.appendChild(rw);
+
+    svg.appendChild(g);
+  }
+
+  // Draw prediction cards - TOP 3
+  predictions.forEach(function(p,i){
+    var px=310,py=120+i*125;
+    var g=document.createElementNS(svgNS,"g");
+
+    // Card
+    var card=document.createElementNS(svgNS,"rect");
+    card.setAttribute("x",px);card.setAttribute("y",py);
+    card.setAttribute("width",540);card.setAttribute("height",110);
+    card.setAttribute("rx",8);card.setAttribute("ry",8);
+    card.setAttribute("fill","#0f3460");card.setAttribute("stroke","#60a5fa");
+    card.setAttribute("stroke-width",1);
+    g.appendChild(card);
+
+    // Rank circle
+    var rc=document.createElementNS(svgNS,"circle");
+    rc.setAttribute("cx",px+26);rc.setAttribute("cy",py+30);
+    rc.setAttribute("r",18);rc.setAttribute("fill","#e94560");
+    g.appendChild(rc);
+
+    var rt=document.createElementNS(svgNS,"text");
+    rt.setAttribute("x",px+26);rt.setAttribute("y",py+36);
+    rt.setAttribute("fill","#fff");rt.setAttribute("font-size","16");
+    rt.setAttribute("font-weight","bold");rt.setAttribute("text-anchor","middle");
+    rt.textContent="#"+(i+1);
+    g.appendChild(rt);
+
+    // Technique
+    var title=document.createElementNS(svgNS,"text");
+    title.setAttribute("x",px+56);title.setAttribute("y",py+24);
+    title.setAttribute("fill","#60a5fa");title.setAttribute("font-size","15");
+    title.setAttribute("font-weight","bold");
+    title.textContent=(p.technique_id||"?")+"  "+(p.technique_name||"Unknown");
+    g.appendChild(title);
+
+    // Tactic
+    var tac=document.createElementNS(svgNS,"text");
+    tac.setAttribute("x",px+56);tac.setAttribute("y",py+44);
+    tac.setAttribute("fill","#a78bfa");tac.setAttribute("font-size","12");
+    tac.textContent="MITRE Tactic: "+(p.tactic||"Unknown");
+    g.appendChild(tac);
+
+    // Probability bar
+    var pct=Math.round((p.probability||0)*100);
+    var bg=document.createElementNS(svgNS,"rect");
+    bg.setAttribute("x",px+56);bg.setAttribute("y",py+56);
+    bg.setAttribute("width",400);bg.setAttribute("height",20);
+    bg.setAttribute("rx",4);bg.setAttribute("ry",4);
+    bg.setAttribute("fill","#1a1a2e");
+    g.appendChild(bg);
+
+    var fill=document.createElementNS(svgNS,"rect");
+    fill.setAttribute("x",px+56);fill.setAttribute("y",py+56);
+    fill.setAttribute("width",Math.max(5,pct*4));fill.setAttribute("height",20);
+    fill.setAttribute("rx",4);fill.setAttribute("ry",4);
+    var clr=pct>=60?"#FF0000":pct>=30?"#f5a623":"#3ad29f";
+    fill.setAttribute("fill",clr);
+    fill.setAttribute("style","transition: width 0.5s");
+    g.appendChild(fill);
+
+    // Percent text
+    var pt=document.createElementNS(svgNS,"text");
+    pt.setAttribute("x",px+470);pt.setAttribute("y",py+70);
+    pt.setAttribute("fill",clr);pt.setAttribute("font-size","14");
+    pt.setAttribute("font-weight","bold");
+    pt.textContent=pct+"%";
+    g.appendChild(pt);
+
+    // Confidence
+    var conf=document.createElementNS(svgNS,"text");
+    conf.setAttribute("x",px+56);conf.setAttribute("y",py+92);
+    var cc=(p.confidence_tier==="high")?"#FF0000":(p.confidence_tier==="medium")?"#f5a623":"#808080";
+    conf.setAttribute("fill",cc);conf.setAttribute("font-size","12");
+    conf.setAttribute("font-weight","bold");
+    conf.textContent="Confidence: "+(p.confidence_tier||"low").toUpperCase();
+    g.appendChild(conf);
+
+    // Reasoning
+    if(p.reasoning){
+      var rsn=document.createElementNS(svgNS,"text");
+      rsn.setAttribute("x",px+230);rsn.setAttribute("y",py+92);
+      rsn.setAttribute("fill","#aeb8fe");rsn.setAttribute("font-size","11");
+      rsn.setAttribute("font-style","italic");
+      rsn.textContent=(p.reasoning||"").substring(0,50)+"...";
+      g.appendChild(rsn);
+    }
+
+    svg.appendChild(g);
+  });
+}
+
+function termLog(msg,cls){
+  var div=document.createElement("div");
+  div.className="line "+(cls||"");
+  div.textContent="["+new Date().toLocaleTimeString()+"] "+msg;
+  termEl.appendChild(div);
+  termEl.scrollTop=termEl.scrollHeight;
+}
+
+var ws=null;
+function connectWS(){
+  ws=new WebSocket("ws://"+location.hostname+":8081/ws");
+  ws.onopen=function(){
+    termLog("Connected to RedForesight graph - waiting for attack from Splunk","info");
+    statusEl.textContent="connected - waiting for attack";
+    statusEl.style.color="#3ad29f";
+  };
+  ws.onmessage=function(ev){
+    var d=JSON.parse(ev.data);
+    if(d.type==="init"){
+      termLog("Episode count baseline: "+d.count,"info");
+    }else if(d.type==="signal"){
+      signalData=d.data;
+      nodeState={};
+      predictions=[];
+      termLog("ATTACK SIGNAL from "+(d.data.host||"?")+": "+(d.data.event_type||"?"),"attacker");
+      statusEl.textContent="processing attack...";
+      statusEl.style.color="#f5a623";
+      renderGraph();
+    }else if(d.type==="node"){
+      nodeState[d.node]=d.state;
+      if(d.result)nodeState[d.node+"Result"]=d.result;
+      if(d.node==="ingest"&&d.state==="done")termLog("AI: Signal ingested into LangGraph","agent");
+      else if(d.node==="splunk"&&d.state==="done")termLog("AI: Splunk context pulled","agent");
+      else if(d.node==="classify"&&d.result)termLog("AI: Classified as "+d.result,"agent");
+      else if(d.node==="gametree"&&d.result)termLog("AI: Game tree expanded - "+d.result,"agent");
+      else if(d.node==="llm"&&d.state==="done")termLog("AI: LLM re-scoring complete","agent");
+      else if(d.node==="brief"&&d.state==="done")termLog("AI: Brief written to Splunk","agent");
+      renderGraph();
+    }else if(d.type==="predictions"){
+      predictions=d.data||[];
+      if(predictions.length>0){
+        termLog("AI: TOP PREDICTION: "+predictions[0].technique_id+" "+predictions[0].technique_name+" ("+Math.round(predictions[0].probability*100)+"%)","agent");
+        termLog("AI: "+predictions.length+" predictions displayed below","info");
+      }else{
+        termLog("AI: No predictions returned","warning");
+      }
+      renderGraph();
+    }else if(d.type==="done"){
+      statusEl.textContent="complete - waiting for next attack";
+      statusEl.style.color="#3ad29f";
+      termLog("SYSTEM: Pipeline complete. Episode stored in ChromaDB.","info");
+    }else if(d.type==="error"){
+      termLog("ERROR: "+d.message,"warning");
+      statusEl.style.color="#FF0000";
+    }
+  };
+  ws.onclose=function(){
+    termLog("Disconnected. Reconnecting...","warning");
+    statusEl.textContent="reconnecting...";
+    setTimeout(connectWS,3000);
+  };
+  ws.onerror=function(){
+    termLog("WebSocket error","warning");
+  };
+}
+
+connectWS();
+renderGraph();
+</script>
+</body>
+</html>

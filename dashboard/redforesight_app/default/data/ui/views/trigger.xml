@@ -1,6 +1,6 @@
-<dashboard version="1.1" theme="dark" script="feedback_v2.js">
+<dashboard version="1.1" theme="dark" script="feedback_v3.js">
   <label>RedForesight — Trigger Attack</label>
-  <description>Fire an attacker signal into the RedForesight agent and watch the prediction pipeline respond.</description>
+  <description>Fire an attacker signal into the RedForesight agent and watch the prediction pipeline respond live.</description>
 
   <row>
     <html>
@@ -14,8 +14,29 @@
         .rf-form select{max-height:200px;overflow-y:auto}
         .rf-form button{margin-top:12px;background:#e94560;color:#fff;border:none;padding:9px 18px;border-radius:4px;cursor:pointer;font-weight:600}
         .rf-form button:hover{background:#c73650}
+        .rf-form button:disabled{background:#555;cursor:not-allowed}
         .rf-badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;margin-left:6px}
         .rf-count{display:inline-block;margin-left:10px;color:#aeb8fe;font-size:12px}
+        .rf-pipeline{margin-top:16px}
+        .rf-pipe-step{display:inline-block;padding:6px 14px;border-radius:6px;margin:3px;font-size:12px;font-weight:600;background:#1a1a2e;border:2px solid #444;color:#888;transition:all 0.3s}
+        .rf-pipe-step.active{background:#3a3a1a;border-color:#f5a623;color:#f5a623}
+        .rf-pipe-step.done{background:#1a3a2a;border-color:#3ad29f;color:#3ad29f}
+        .rf-pipe-arrow{display:inline-block;color:#555;font-size:14px;margin:0 2px}
+        .rf-pred{background:#0f3460;border:1px solid #60a5fa;border-radius:8px;padding:12px 16px;margin:6px 0}
+        .rf-pred-rank{display:inline-block;width:28px;height:28px;border-radius:50%;background:#e94560;color:#fff;text-align:center;line-height:28px;font-weight:bold;font-size:14px;margin-right:10px}
+        .rf-pred-name{color:#60a5fa;font-size:15px;font-weight:bold}
+        .rf-pred-tactic{color:#a78bfa;font-size:12px;margin:2px 0}
+        .rf-pred-bar{height:18px;border-radius:4px;background:#1a1a2e;margin:4px 0;overflow:hidden}
+        .rf-pred-fill{height:100%;border-radius:4px;transition:width 0.5s}
+        .rf-pred-pct{color:#fff;font-size:13px;font-weight:bold}
+        .rf-pred-conf{font-size:12px;font-weight:bold}
+        .rf-pred-reason{color:#aeb8fe;font-size:11px;margin-top:4px;font-style:italic}
+        .rf-term{background:#0a0e14;border:2px solid #1a1a2e;border-radius:8px;padding:10px 14px;margin-top:10px;font-family:monospace;font-size:12px;color:#a0a0a0;max-height:160px;overflow-y:auto}
+        .rf-term .line{margin:2px 0}
+        .rf-term .attacker{color:#f5a623}
+        .rf-term .agent{color:#3ad29f}
+        .rf-term .warning{color:#FF0000}
+        .rf-term .info{color:#aeb8fe}
       </style>
       <div class="rf-hero">
         <h1>RedForesight — Predictive Threat Intelligence <span class="rf-badge">v1.0</span></h1>
@@ -29,22 +50,44 @@
       <html>
         <div class="rf-form">
           <label>Attack Signal <span id="rf_scenario_count" class="rf-count"></span></label>
-          <select id="rf_scenario" size="12" style="height:220px"></select>
-          <label>Target Host </label>
+          <select id="rf_scenario" size="8" style="height:160px"></select>
+          <label>Target Host</label>
           <input type="text" id="rf_host" value="BSTOLL-L"/>
-          <label>Source IP </label>
+          <label>Source IP</label>
           <input type="text" id="rf_source_ip" value="10.0.0.5" readonly="readonly" style="opacity:0.7"/>
-          <label>Severity </label>
+          <label>Severity</label>
           <select id="rf_severity">
             <option value="low">Low</option>
             <option value="medium">Medium</option>
-            <option value="high">High</option>
+            <option value="high" selected="selected">High</option>
             <option value="critical">Critical</option>
           </select>
+          <label>Agent API Port (FastAPI)</label>
+          <input type="text" id="rf_api_port" value="8081" placeholder="e.g. 8081 or 8080" style="width:140px;margin-bottom:6px"/>
           <label>Raw event description (editable)</label>
-          <textarea id="rf_raw" rows="4" style="font-family:monospace;font-size:12px"></textarea>
-          <button id="rf_trigger_btn">▶ Fire Signal to Agent</button>
-          <div id="rf_trigger_status" style="margin-top:10px;color:#aeb8fe;font-size:12px"></div>
+          <textarea id="rf_raw" rows="3" style="font-family:monospace;font-size:12px"></textarea>
+          <button id="rf_trigger_btn">&#9654; Fire Signal to Agent</button>
+          <div id="rf_trigger_status" style="margin-top:8px;color:#aeb8fe;font-size:13px"></div>
+
+          <div class="rf-pipeline" id="rf_pipeline" style="display:none">
+            <div class="rf-pipe-step" id="pipe_ingest">1. Ingest Signal</div>
+            <span class="rf-pipe-arrow">&#8594;</span>
+            <div class="rf-pipe-step" id="pipe_splunk">2. Pull Splunk Context</div>
+            <span class="rf-pipe-arrow">&#8594;</span>
+            <div class="rf-pipe-step" id="pipe_classify">3. Classify Tactic</div>
+            <span class="rf-pipe-arrow">&#8594;</span>
+            <div class="rf-pipe-step" id="pipe_gametree">4. Expand Game Tree</div>
+            <span class="rf-pipe-arrow">&#8594;</span>
+            <div class="rf-pipe-step" id="pipe_llm">5. LLM Re-Score</div>
+            <span class="rf-pipe-arrow">&#8594;</span>
+            <div class="rf-pipe-step" id="pipe_brief">6. Generate Brief</div>
+          </div>
+
+          <div id="rf_predictions" style="margin-top:14px"></div>
+
+          <div class="rf-term" id="rf_terminal">
+            <div class="line info">[SYSTEM] RedForesight agent online. Awaiting attack signal...</div>
+          </div>
         </div>
       </html>
     </panel>
@@ -52,7 +95,7 @@
 
   <row>
     <panel>
-      <title>Live Agent Task Status</title>
+      <title>Recent Defender Briefs (from Splunk)</title>
       <table>
         <search>
           <query>index=main sourcetype=_json source=redforesight_agent earliest=-1h
@@ -68,7 +111,7 @@
           <earliest>-1h@h</earliest>
           <latest>now</latest>
         </search>
-        <option name="refresh">10s</option>
+        <option name="refresh">5s</option>
         <option name="refresh.display">progressbar</option>
         <option name="drilldown">row</option>
         <format type="color" field="Probability">

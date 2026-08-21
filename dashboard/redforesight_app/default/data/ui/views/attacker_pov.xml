@@ -1,4 +1,4 @@
-<dashboard version="1.1" theme="dark" script="feedback_v2.js">
+<dashboard version="1.1" theme="dark" script="feedback_v3.js">
   <label>RedForesight — Attacker POV Terminal</label>
   <description>Live narrative view of what the AI agent thinks the attacker is doing right now.</description>
 
@@ -84,3 +84,4 @@
     </panel>
   </row>
 </dashboard>
+

@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>RedForesight Remote Attack Launcher</title>
+<style>
+body{background:#0a0e14;color:#fff;font-family:Arial,sans-serif;margin:0;padding:20px}
+h1{color:#e94560;font-size:22px}
+h2{color:#aeb8fe;font-size:15px;margin-top:20px}
+select,input,button{padding:8px;border-radius:4px;border:1px solid #33415c;background:#11182a;color:#fff;font-size:13px;width:100%;margin:4px 0}
+button{background:#e94560;border:none;padding:12px;font-weight:bold;cursor:pointer;font-size:14px}
+button:hover{background:#c73650}
+button:disabled{background:#555;cursor:not-allowed}
+.result{background:#0f3460;border-radius:8px;padding:14px;margin-top:14px;display:none}
+.result .pred{background:#1a1a2e;border-radius:6px;padding:10px;margin:6px 0;border-left:3px solid #3ad29f}
+.result .title{color:#60a5fa;font-weight:bold;font-size:14px}
+.result .tactic{color:#a78bfa;font-size:12px}
+.result .prob{color:#f5a623;font-weight:bold}
+.result .reason{color:#aeb8fe;font-size:12px;font-style:italic}
+.result .action{color:#3ad29f;font-size:12px;margin-top:4px}
+.status{padding:8px;border-radius:4px;margin:8px 0;font-size:13px}
+.status.running{background:#3a3a1a;color:#f5a623}
+.status.done{background:#1a3a2a;color:#3ad29f}
+.status.error{background:#3a1a1a;color:#FF0000}
+</style>
+</head>
+<body>
+<h1>RedForesight Remote Attack Launcher</h1>
+<p style="color:#aeb8fe;font-size:13px">Fire attacks from this laptop to the RedForesight agent running on another machine. The agent will analyze the attack, classify it, and predict what the attacker will do next.</p>
+
+<h2>Target Server IP</h2>
+<input type="text" id="serverIp" value="11.12.6.174" placeholder="Enter the IP of the machine running RedForesight" style="width:300px"/>
+<input type="text" id="apiKey" value="redforesight_demo_key_2026" placeholder="API Key" style="width:300px"/>
+
+<h2>Select Attack</h2>
+<select id="attack" style="height:200px">
+<optgroup label="Initial Access">
+<option value="phishing_macro">Phishing - Malicious Word Document</option>
+<option value="phishing_link">Phishing - Fake Login Page Link</option>
+<option value="log4shell">Log4Shell Exploit on Web Server</option>
+<option value="sql_injection">SQL Injection on Login Form</option>
+<option value="stolen_password">Stolen Password Login from Foreign Country</option>
+<option value="usb_drop">USB Drive Found in Parking Lot</option>
+</optgroup>
+<optgroup label="Credential Access">
+<option value="lsass_dump">LSASS Memory Dump - Steal All Passwords</option>
+<option value="dcsync">DCSync Attack - Copy All Domain Passwords</option>
+<option value="kerberoast">Kerberoasting - Crack Service Account Password</option>
+<option value="brute_force">Brute Force - 1000 Passwords Tried</option>
+<option value="password_spray">Password Spray - One Password on 100 Accounts</option>
+<option value="keylogger">Keylogger Found Recording All Keystrokes</option>
+</optgroup>
+<optgroup label="Lateral Movement">
+<option value="rdp_connect">RDP Connection with Stolen Credentials</option>
+<option value="psexec_run">PsExec Remote Command Execution</option>
+<option value="winrm_remote">WinRM PowerShell Remoting</option>
+<option value="pass_the_hash">Pass the Hash - Login Without Password</option>
+</optgroup>
+<optgroup label="Execution">
+<option value="powershell_download">PowerShell Downloads Malware</option>
+<option value="cmd_adduser">Command Prompt Creates Hidden Admin Account</option>
+<option value="python_payload">Python Injects Malware into Process</option>
+</optgroup>
+<optgroup label="Persistence">
+<option value="registry_run_key">Malware Added to Windows Startup</option>
+<option value="new_local_user">Hidden Admin Account Created at Night</option>
+<option value="wmi_subscription">Hidden WMI Event Runs Every 5 Minutes</option>
+</optgroup>
+<optgroup label="Privilege Escalation">
+<option value="uac_bypass">UAC Bypass - Admin Without Password Prompt</option>
+<option value="exploit_pe">Vulnerability Exploited for SYSTEM Access</option>
+</optgroup>
+<optgroup label="Defense Evasion">
+<option value="disable_defender">Windows Defender Turned Off</option>
+<option value="clear_logs">Security Logs Cleared to Hide Attack</option>
+<option value="process_hollowing">Malware Hides Inside Legitimate Process</option>
+</optgroup>
+<optgroup label="Impact">
+<option value="ransomware">Ransomware Encrypts All Files</option>
+<option value="ddos_syn">DDoS Attack Takes Website Offline</option>
+<option value="force_shutdown">Domain Controller Forced to Shutdown</option>
+<option value="data_wipe">All Files Permanently Deleted</option>
+</optgroup>
+<optgroup label="OWASP Top 10">
+<option value="owasp_a01_bac">A01 - Broken Access Control</option>
+<option value="owasp_a03_injection">A03 - SQL Injection</option>
+<option value="owasp_a05_misconfig">A05 - Default Admin Password</option>
+<option value="owasp_a06_vuln">A06 - Vulnerable Log4j Component</option>
+<option value="owasp_a10_ssrf">A10 - Server-Side Request Forgery</option>
+</optgroup>
+<optgroup label="Threat Models - STRIDE">
+<option value="tm_stride_spoofing">STRIDE - Spoofing (Impersonation)</option>
+<option value="tm_stride_tampering">STRIDE - Tampering (Data Modification)</option>
+<option value="tm_stride_repudiation">STRIDE - Repudiation (Log Deletion)</option>
+<option value="tm_stride_info_disclosure">STRIDE - Information Disclosure</option>
+<option value="tm_stride_dos">STRIDE - Denial of Service</option>
+<option value="tm_stride_eop">STRIDE - Elevation of Privilege</option>
+</optgroup>
+<optgroup label="Threat Models - Cyber Kill Chain">
+<option value="tm_killchain_recon">Kill Chain Step 1 - Reconnaissance</option>
+<option value="tm_killchain_weaponize">Kill Chain Step 2 - Weaponization</option>
+<option value="tm_killchain_deliver">Kill Chain Step 3 - Delivery</option>
+<option value="tm_killchain_exploit">Kill Chain Step 4 - Exploitation</option>
+<option value="tm_killchain_install">Kill Chain Step 5 - Installation</option>
+<option value="tm_killchain_c2">Kill Chain Step 6 - Command and Control</option>
+<option value="tm_killchain_action">Kill Chain Step 7 - Actions on Objectives</option>
+</optgroup>
+</select>
+
+<button id="fireBtn" onclick="fireAttack()">FIRE ATTACK</button>
+
+<div id="statusBox"></div>
+<div id="resultBox" class="result"></div>
+
+<script>
+var ATTACKS = {
+  phishing_macro:{et:"initial_access_attempt",raw:"User opened a malicious Word document. The document ran a macro that launched PowerShell.",sev:"high"},
+  phishing_link:{et:"initial_access_attempt",raw:"User clicked a link in a phishing email. The link opened a fake login page that stole their password.",sev:"medium"},
+  log4shell:{et:"initial_access_attempt",raw:"Attacker sent a Log4Shell exploit to the web server. The server ran the attacker code.",sev:"critical"},
+  sql_injection:{et:"initial_access_attempt",raw:"SQL injection on the login page. Attacker tried to bypass authentication.",sev:"critical"},
+  stolen_password:{et:"initial_access_attempt",raw:"Someone logged in with a stolen password from a country the user never visited.",sev:"high"},
+  usb_drop:{et:"initial_access_attempt",raw:"User found a USB drive in the parking lot and plugged it in. It ran malware automatically.",sev:"high"},
+  lsass_dump:{et:"credential_access_attempt",raw:"Malware read the memory of lsass.exe to steal all passwords stored on the computer.",sev:"critical"},
+  dcsync:{et:"credential_access_attempt",raw:"Attacker used DCSync to copy all domain passwords from the domain controller.",sev:"critical"},
+  kerberoast:{et:"credential_access_attempt",raw:"Attacker requested Kerberos tickets to crack a service account password offline.",sev:"high"},
+  brute_force:{et:"credential_access_attempt",raw:"Attacker tried 1000 passwords on one account until they found the right one.",sev:"high"},
+  password_spray:{et:"credential_access_attempt",raw:"Attacker tried one password against 100 different user accounts at the same time.",sev:"high"},
+  keylogger:{et:"credential_access_attempt",raw:"A keylogger was found recording everything the user types including passwords.",sev:"high"},
+  rdp_connect:{et:"lateral_movement_attempt",raw:"Attacker used Remote Desktop to connect to another computer using stolen credentials.",sev:"high"},
+  psexec_run:{et:"lateral_movement_attempt",raw:"Attacker used PsExec to run commands on another computer remotely.",sev:"high"},
+  winrm_remote:{et:"lateral_movement_attempt",raw:"Attacker used WinRM to run PowerShell on another computer in the network.",sev:"high"},
+  pass_the_hash:{et:"lateral_movement_attempt",raw:"Attacker used a stolen password hash to log in without knowing the actual password.",sev:"critical"},
+  powershell_download:{et:"execution_attempt",raw:"PowerShell downloaded a file from the internet. The file was malware.",sev:"high"},
+  cmd_adduser:{et:"execution_attempt",raw:"Command prompt created a new user account called backdoor and made it an admin.",sev:"high"},
+  python_payload:{et:"execution_attempt",raw:"Python ran code that injected malware into another program.",sev:"high"},
+  registry_run_key:{et:"persistence_attempt",raw:"Malware added itself to the Windows startup registry key so it runs on every boot.",sev:"high"},
+  new_local_user:{et:"persistence_attempt",raw:"A new user account was created at night. The account was added to the admin group.",sev:"high"},
+  wmi_subscription:{et:"persistence_attempt",raw:"A hidden WMI event runs a command every 5 minutes. This is hard to detect.",sev:"high"},
+  uac_bypass:{et:"privilege_escalation_attempt",raw:"Attacker used a UAC bypass trick to get admin rights without a password prompt.",sev:"high"},
+  exploit_pe:{et:"privilege_escalation_attempt",raw:"A known vulnerability was exploited to get SYSTEM level access.",sev:"critical"},
+  disable_defender:{et:"defense_evasion_attempt",raw:"Windows Defender was turned off. This let the attacker install malware without detection.",sev:"critical"},
+  clear_logs:{et:"defense_evasion_attempt",raw:"The Security event log was cleared to remove evidence of the attack.",sev:"high"},
+  process_hollowing:{et:"defense_evasion_attempt",raw:"Malware injected its code into a legitimate running process to hide from detection.",sev:"high"},
+  ransomware:{et:"impact_attempt",raw:"Ransomware encrypted all files on the server. Attacker demanded 50 Bitcoin to unlock them.",sev:"critical"},
+  ddos_syn:{et:"impact_attempt",raw:"A DDoS attack sent 100000 requests per second to the website. The website went offline.",sev:"high"},
+  force_shutdown:{et:"impact_attempt",raw:"Attacker forced the domain controller to shut down. 3000 users lost access.",sev:"high"},
+  data_wipe:{et:"impact_attempt",raw:"Attacker permanently deleted all files on the database server. Data cannot be recovered.",sev:"critical"},
+  owasp_a01_bac:{et:"initial_access_attempt",raw:"OWASP A01 - Broken Access Control. Attacker accessed admin panel by changing URL from /user to /admin without authentication.",sev:"critical"},
+  owasp_a03_injection:{et:"initial_access_attempt",raw:"OWASP A03 - Injection. SQL injection in login form let attacker bypass authentication and access all user data.",sev:"critical"},
+  owasp_a05_misconfig:{et:"initial_access_attempt",raw:"OWASP A05 - Security Misconfiguration. Default admin password was never changed. Attacker logged in with admin/admin.",sev:"high"},
+  owasp_a06_vuln:{et:"initial_access_attempt",raw:"OWASP A06 - Vulnerable Components. Old version of Log4j library was exploited. Attacker sent a crafted string that ran code on the server.",sev:"critical"},
+  owasp_a10_ssrf:{et:"initial_access_attempt",raw:"OWASP A10 - Server-Side Request Forgery. Attacker tricked the server into fetching data from internal network behind the firewall.",sev:"critical"},
+  tm_stride_spoofing:{et:"initial_access_attempt",raw:"STRIDE Spoofing. Attacker impersonated a legitimate user by stealing their session token.",sev:"high"},
+  tm_stride_tampering:{et:"defense_evasion_attempt",raw:"STRIDE Tampering. Attacker modified a database record to change their account balance.",sev:"high"},
+  tm_stride_repudiation:{et:"defense_evasion_attempt",raw:"STRIDE Repudiation. Attacker deleted all audit logs so they can deny performing the action.",sev:"medium"},
+  tm_stride_info_disclosure:{et:"exfiltration_attempt",raw:"STRIDE Information Disclosure. Attacker accessed a hidden API and downloaded all customer data.",sev:"critical"},
+  tm_stride_dos:{et:"impact_attempt",raw:"STRIDE Denial of Service. Attacker flooded the web server with 50000 requests per second.",sev:"critical"},
+  tm_stride_eop:{et:"privilege_escalation_attempt",raw:"STRIDE Elevation of Privilege. A normal user exploited a bug to gain admin rights.",sev:"critical"},
+  tm_killchain_recon:{et:"recon_attempt",raw:"Cyber Kill Chain Step 1 Reconnaissance. Attacker gathered information about the company.",sev:"low"},
+  tm_killchain_weaponize:{et:"initial_access_attempt",raw:"Cyber Kill Chain Step 2 Weaponization. Attacker built malware inside a fake PDF invoice.",sev:"high"},
+  tm_killchain_deliver:{et:"initial_access_attempt",raw:"Cyber Kill Chain Step 3 Delivery. Attacker sent the weaponized PDF to 50 employees.",sev:"high"},
+  tm_killchain_exploit:{et:"initial_access_attempt",raw:"Cyber Kill Chain Step 4 Exploitation. Employee opened the PDF. Exploit ran and installed malware.",sev:"critical"},
+  tm_killchain_install:{et:"persistence_attempt",raw:"Cyber Kill Chain Step 5 Installation. Malware installed a backdoor that survives reboots.",sev:"high"},
+  tm_killchain_c2:{et:"c2_communication",raw:"Cyber Kill Chain Step 6 Command and Control. Backdoor connected to attacker server.",sev:"high"},
+  tm_killchain_action:{et:"impact_attempt",raw:"Cyber Kill Chain Step 7 Actions on Objectives. Attacker stealing data and encrypting files.",sev:"critical"}
+};
+
+function fireAttack() {
+  var serverIp = document.getElementById("serverIp").value;
+  var apiKey = document.getElementById("apiKey").value;
+  var attackKey = document.getElementById("attack").value;
+  var a = ATTACKS[attackKey];
+  if (!a) { alert("Select an attack"); return; }
+
+  var btn = document.getElementById("fireBtn");
+  btn.disabled = true;
+  btn.textContent = "PROCESSING...";
+
+  var statusBox = document.getElementById("statusBox");
+  statusBox.className = "status running";
+  statusBox.textContent = "Firing " + attackKey + " to " + serverIp + ":8080...";
+
+  var body = {
+    host: "ATTACKER-LAPTOP",
+    source_ip: "0.0.0.0",
+    event_type: a.et,
+    raw_event: a.raw,
+    severity: a.sev,
+    splunk_index: "botsv3",
+    additional_context: {}
+  };
+
+  fetch("http://" + serverIp + ":8080/api/v1/trigger", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-API-Key": apiKey },
+    body: JSON.stringify(body)
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    statusBox.textContent = "Signal accepted. Waiting for prediction...";
+    pollTask(serverIp, apiKey, d.task_id);
+  }).catch(function(e) {
+    statusBox.className = "status error";
+    statusBox.textContent = "Failed: " + e + " - Make sure " + serverIp + ":8080 is reachable";
+    btn.disabled = false;
+    btn.textContent = "FIRE ATTACK";
+  });
+}
+
+function pollTask(serverIp, apiKey, taskId) {
+  var attempts = 0;
+  var iv = setInterval(function() {
+    fetch("http://" + serverIp + ":8080/api/v1/trigger/status/" + taskId, {
+      headers: { "X-API-Key": apiKey }
+    }).then(function(r) { return r.json(); }).then(function(data) {
+      attempts++;
+      if (data.status === "completed") {
+        clearInterval(iv);
+        showResult(data.brief);
+        document.getElementById("fireBtn").disabled = false;
+        document.getElementById("fireBtn").textContent = "FIRE ATTACK";
+      } else if (data.status === "failed") {
+        clearInterval(iv);
+        var sb = document.getElementById("statusBox");
+        sb.className = "status error";
+        sb.textContent = "Agent failed: " + (data.error || "unknown");
+        document.getElementById("fireBtn").disabled = false;
+        document.getElementById("fireBtn").textContent = "FIRE ATTACK";
+      } else if (attempts > 30) {
+        clearInterval(iv);
+        var sb2 = document.getElementById("statusBox");
+        sb2.className = "status error";
+        sb2.textContent = "Timed out";
+        document.getElementById("fireBtn").disabled = false;
+        document.getElementById("fireBtn").textContent = "FIRE ATTACK";
+      } else {
+        document.getElementById("statusBox").textContent = "Agent running... (" + attempts + ")";
+      }
+    }).catch(function() { attempts++; });
+  }, 2000);
+}
+
+function showResult(brief) {
+  var box = document.getElementById("resultBox");
+  box.style.display = "block";
+  var sb = document.getElementById("statusBox");
+  sb.className = "status done";
+  sb.textContent = "Prediction complete!";
+
+  var html = "<h2 style='color:#3ad29f'>Attack Analysis Results</h2>";
+  html += "<div style='color:#aeb8fe;font-size:13px;margin-bottom:10px'>";
+  html += "<b>Detected Tactic:</b> " + (brief.tactic_classification || "Unknown") + " (" + (brief.tactic_id || "") + ")<br>";
+  html += "<b>Signal:</b> " + (brief.signal_summary || "") + "<br>";
+  html += "<b>Predictions:</b> " + (brief.ranked_predictions || []).length;
+  html += "</div>";
+
+  var preds = brief.ranked_predictions || [];
+  preds.slice(0, 3).forEach(function(p, i) {
+    var pct = Math.round((p.probability || 0) * 100);
+    var color = pct >= 60 ? "#FF0000" : pct >= 30 ? "#f5a623" : "#3ad29f";
+    html += "<div class='pred'>";
+    html += "<div class='title'>#" + (i+1) + " " + (p.technique_id || "?") + " " + (p.technique_name || "?") + "</div>";
+    html += "<div class='tactic'>Tactic: " + (p.tactic || "?") + "</div>";
+    html += "<div class='prob' style='color:" + color + "'>Probability: " + pct + "% | Confidence: " + (p.confidence_tier || "low").toUpperCase() + "</div>";
+    html += "<div class='reason'>" + (p.reasoning || "") + "</div>";
+    html += "<div class='action'>Action: " + (p.defender_action || "") + "</div>";
+    html += "</div>";
+  });
+
+  box.innerHTML = html;
+}
+</script>
+</body>
+</html>
